@@ -1,0 +1,42 @@
+services:
+  app-server:
+    image: ghcr.io/david-yj-52/d94-query:${IMAGE_TAG:-latest}
+    container_name: d94-query
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      CACHE_TYPE: ${CACHE_TYPE:-simple}
+
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      NEXT_PUBLIC_URL: ${NEXT_PUBLIC_URL:-*}
+
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://localhost:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-cira-attachments}
+      MINIO_REGION: ${MINIO_REGION:-ap-northeast-2}
+
+      SOLACE_ENABLE: ${SOLACE_ENABLE:-false}
+      SOLACE_SEMP_CREDENTIAL: ${SOLACE_SEMP_CREDENTIAL:-}
+      KAFKA_ENABLE: ${KAFKA_ENABLE:-false}
+      RABBITMQ_ENABLE: ${RABBITMQ_ENABLE:-false}
+    networks:
+      - d94-shared
+
+# db/messaging용 docker compose 쪽에서도 아래와 동일한 external network에 붙어야
+# DB_HOST=postgres, REDIS_HOST=redis 처럼 컨테이너 이름으로 서로를 찾을 수 있음.
+# 최초 1회만: docker network create d94-shared
+networks:
+  d94-shared:
+    external: true
+    name: ${SHARED_NETWORK_NAME:-d94-shared}

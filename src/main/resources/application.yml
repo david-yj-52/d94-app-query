@@ -1,0 +1,132 @@
+cira:
+  storage:
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    access-key: ${MINIO_ACCESS_KEY:minioadmin}
+    secret-key: ${MINIO_SECRET_KEY:minioadmin}
+    bucket: ${MINIO_BUCKET:cira-attachments}
+    region: ${MINIO_REGION:ap-northeast-2}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  packages-to-scan: tsh.d94
+
+spring:
+  flyway:
+    enabled: true
+    locations:
+      - classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 0
+    validate-on-migrate: true
+    ignore-migration-patterns: "*:missing"
+    table: flyway_schema_history
+    # === 개발 환경에서만 활성화 추천 ===
+    #    clean-on-validation-error: true     # ← 이 옵션 추가
+    clean-disabled: false               # ← 이 옵션도 함께 false로 설정
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        default_schema: public
+      org.hibernate.envers:
+        audit_table_suffix: _HIST
+
+
+  cache:
+    type: ${CACHE_TYPE:simple}
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+application:
+  tenant: TSH
+  module-name: @module-name@
+  version: @project.version@
+  service-name: @service-name@
+  env: LOCAL
+  security:
+    jwt:
+      secret-key: ${JWT_SECRET_KEY}
+      expiration: 900000 # 15 minutes
+      refresh-token:
+        expiration: 604800000 # 7 days
+    cors:
+      allowed-origins: ${NEXT_PUBLIC_URL:*}
+  messaging:
+    credential:
+      solace: ${SOLACE_SEMP_CREDENTIAL:}
+
+    enable:
+      solace:
+        enable: ${SOLACE_ENABLE:false}
+        pub: ${SOLACE_PUB_ENABLE:true}
+        sub: ${SOLACE_SUB_ENABLE:true}
+      kafka:
+        enable: ${KAFKA_ENABLE:false}
+        pub: ${KAFKA_PUB_ENABLE:true}
+        sub: ${KAFKA_SUB_ENABLE:true}
+      rabbitmq:
+        enable: ${RABBITMQ_ENABLE:false}
+        pub: ${RABBITMQ_PUB_ENABLE:true}
+        sub: ${RABBITMQ_SUB_ENABLE:true}
+
+
+messaging:
+  solace:
+    host: localhost
+    vpn: default
+    login:
+      user: admin       # client-username
+      pwd: admin        # password
+    switch:
+      producer: true
+      consumer: true
+    log:
+      level: INFO
+    policy:
+      connect:
+        timeout:
+          ms: 1000
+        retries:
+          count: -1
+      reconnect:
+        retries:
+          count: 1
+          wait-ms: 1000
+      compression:
+        level: 5
+      message:
+        ack-mode: 1
+        delivery-mode: PERSISTENT
+        alive:
+          interval-ms: 0
+          limit: 0
+      security:
+        ssl:
+          enable: SSL
+          store:
+            trust: C:\
+            key: C:\
+server:
+  servlet:
+    context-path: /tsh
