@@ -197,6 +197,9 @@ sequenceDiagram
 | DB URL      | `jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME}`               |
 | DB 인증     | `.env` 파일 (`DB_USERNAME`, `DB_PASSWORD`)                                        |
 | Solace 연결 | DB에서 동적 로드 (`GsMsgSrvConnModel`)                                            |
+| Eureka      | `spring-cloud-starter-netflix-eureka-client` (Spring Cloud `2024.0.1`). 서비스 ID `d94-query`. `EUREKA_ENABLED`(yml 기본 false, compose 기본 true), `EUREKA_URL`, `EUREKA_INSTANCE_HOSTNAME`(컨테이너 이름 등록, `prefer-ip-address: false`) |
+| Gateway     | delap `gateway-cloud-gateway-1` 이 `lb://d94-query`, `Path=/tsh/**` 로 호출 (게이트웨이 저장소 설정) |
+| Docker 네트워크 | compose 가 external `CLOUD_NETWORK_NAME`(`befw-cloud-network`)·`DB_NETWORK_NAME`(`tsh-network`) 에 붙음 |
 | Swagger UI  | `/swagger-ui.html`                                                                |
 | API Docs    | `/v3/api-docs`                                                                    |
 | 로그 설정   | `log4j2-spring.xml`                                                               |

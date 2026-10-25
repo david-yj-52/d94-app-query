@@ -21,7 +21,21 @@
 
         <d94-lib-core>1.0.0-SNAPSHOT</d94-lib-core>
         <d94-lib-data>1.0.0-SNAPSHOT</d94-lib-data>
+        <!-- Spring Boot 3.4.x 호환 릴리스 트레인 -->
+        <spring-cloud.version>2024.0.1</spring-cloud.version>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
 
@@ -53,6 +67,12 @@
             <groupId>io.minio</groupId>
             <artifactId>minio</artifactId>
             <version>8.5.7</version>
+        </dependency>
+
+        <!-- Eureka 등록 (delap: cloud-gateway 가 lb://d94-query 로 호출). EUREKA_ENABLED=true 일 때만 동작 -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
         </dependency>
     </dependencies>
 

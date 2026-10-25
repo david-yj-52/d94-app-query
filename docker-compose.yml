@@ -30,13 +30,23 @@ services:
       SOLACE_SEMP_CREDENTIAL: ${SOLACE_SEMP_CREDENTIAL:-}
       KAFKA_ENABLE: ${KAFKA_ENABLE:-false}
       RABBITMQ_ENABLE: ${RABBITMQ_ENABLE:-false}
-    networks:
-      - d94-shared
 
-# db/messaging용 docker compose 쪽에서도 아래와 동일한 external network에 붙어야
-# DB_HOST=postgres, REDIS_HOST=redis 처럼 컨테이너 이름으로 서로를 찾을 수 있음.
-# 최초 1회만: docker network create d94-shared
+      # Eureka 등록 → cloud-gateway 가 lb://d94-query 로 호출
+      EUREKA_ENABLED: ${EUREKA_ENABLED:-true}
+      EUREKA_URL: ${EUREKA_URL:-http://eureka-cloud-eureka-1:8761/eureka/}
+      # 게이트웨이가 찾아올 이름 = 이 컨테이너 이름 (cloud 네트워크에서 DNS 로 풀림)
+      EUREKA_INSTANCE_HOSTNAME: ${EUREKA_INSTANCE_HOSTNAME:-d94-query}
+    networks:
+      - cloud
+      - db
+
+# 기존 external 네트워크에 붙는다 (이 compose 는 만들지 않음).
+# - cloud: Eureka·Config·Gateway (delap: befw-cloud-network)
+# - db   : Postgres 등 (delap: tsh-network → DB_HOST=tsh-postgres)
 networks:
-  d94-shared:
+  cloud:
     external: true
-    name: ${SHARED_NETWORK_NAME:-d94-shared}
+    name: ${CLOUD_NETWORK_NAME:-befw-cloud-network}
+  db:
+    external: true
+    name: ${DB_NETWORK_NAME:-tsh-network}
