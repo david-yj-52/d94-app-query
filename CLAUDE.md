@@ -11,7 +11,7 @@
 | **Parent**        | `d94:1.0-SNAPSHOT`                                                |
 | **핵심 의존성**   | `d94-lib-core:1.0.0-SNAPSHOT`                                     |
 | **Base Package**  | `tsh.d94.app.server`                                  |
-| **Scan Packages** | `tsh.d94.lib.core`, `tsh.d94.app.server` |
+| **Scan Packages** | `tsh.d94.lib.core`, `tsh.d94.query`, `tsh.d94.app.server` (QueryApplication 은 `tsh.d94.query`, 나머지 클래스 선언은 `tsh.d94.app.server`) |
 
 ---
 
@@ -139,7 +139,7 @@ sequenceDiagram
 | `MessageServerConfigController` | `/mdm/msg-server-config` | 메시징 서버 설정 CRUD |
 | `ConfigManageController`        | `/mdm/config`            | 설정 관리             |
 | `MessageOutboundController`     | `/util/message-outbound` | 메시지 수동 발행 유틸 |
-| `TestController`                | `/test`                  | 개발 테스트용         |
+| `InterfaceTestController`       | `/api/v1/interface-tests` | 인터페이스(통신) 테스트 CRUD — GET·HEAD·POST(201)·PUT·PATCH·DELETE(204) |
 | `GlobalExceptionHandler`        | —                        | 전역 예외 처리        |
 
 ### DTO
@@ -159,6 +159,7 @@ sequenceDiagram
 |-------------------------|--------------------------------------------------------------------------------------------|
 | `data/orm/masterPrompt` | `StMptTmpltDefModel` (마스터 프롬프트 템플릿), `StMptWrkrTmpltRelModel` (워커-템플릿 관계) |
 | `data/orm/organization` | `StOrgUnitDefModel` (조직단위 정의), `StOrgWrkrRelModel` (조직-워커 관계)                  |
+| `data/orm/ifTest`      | `SnIfTestItemModel`·`SnIfTestItemAccess`·`SnIfTestItemRepo` (`SN_IF_TEST_ITEM`, V300 마이그레이션) — UI→UMD→백엔드→DB 통신 확인용 |
 
 ### 상수
 
@@ -217,3 +218,7 @@ sequenceDiagram
 | 8  | `TestController` 운영 비활성화 방안    | 운영 환경 노출 제어 미정의                                                        |
 | 9  | HTTP 인증·인가                         | Security 설정 없음 (`google-api-client` 존재하나 미연결)                          |
 | 10 | `SolaceMessageInfoVo.msgObject` 보관   | `BytesXMLMessage` 직접 보관 시 메모리 해제 정책 미정의                            |
+| 11 | `AbstractCrudService.findById` (lib-core) | `TenantContext` 를 채우는 곳이 없어 HTTP 요청에서 항상 실패(500). ifTest 는 tenant 를 인자로 받는 Repo 메서드로 우회 |
+| 12 | 패키지 선언 ↔ 폴더 불일치               | 파일은 `tsh/d94/query/**` 폴더, 선언은 `tsh.d94.app.server.*`. 스캔에 두 패키지를 모두 넣어 동작은 함 |
+| 13 | 기존 테스트 실패 2건                    | `AuthControllerTest`(@SpringBootConfiguration 못 찾음), `CommentServiceTest`(UnnecessaryStubbing) |
+| 14 | 토큰 없는 보호 API 호출                 | 401 이 아니라 403 응답 (SecurityConfig 에 AuthenticationEntryPoint 없음) |

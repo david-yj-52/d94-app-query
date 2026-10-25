@@ -1,7 +1,7 @@
 package tsh.d94.app.server.constant;
 
 /**
- * Application table names: ST (server), SN_CIRA (Cira app).
+ * Application table names: ST (server), SN_CIRA (Cira app), SN_IF_TEST (interface test).
  */
 public class ApTableName {
 
@@ -49,4 +49,5 @@ public class ApTableName {
 	public static final String SN_CIRA_ISSUE_SEARCH_IDX = "SN_CIRA_ISSUE_SEARCH_IDX";
 	public static final String SN_CIRA_WIKI_PAGE = "SN_CIRA_WIKI_PAGE";
 	public static final String SN_CIRA_WIKI_PAGE_VER = "SN_CIRA_WIKI_PAGE_VER";
+	public static final String SN_IF_TEST_ITEM = "SN_IF_TEST_ITEM";
 }
