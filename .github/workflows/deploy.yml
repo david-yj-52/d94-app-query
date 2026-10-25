@@ -1,8 +1,10 @@
 name: Build & Push to GHCR
 
 on:
+  pull_request:
+    branches: [ deploy ]
   push:
-    branches: [ main ]
+    branches: [ deploy ]
     tags:
       - 'v*'
 
@@ -42,6 +44,11 @@ jobs:
               </server>
               <server>
                 <id>github-lib-core</id>
+                <username>${env.GITHUB_ACTOR}</username>
+                <password>${env.PACKAGES_TOKEN}</password>
+              </server>
+              <server>
+                <id>github-lib-data</id>
                 <username>${env.GITHUB_ACTOR}</username>
                 <password>${env.PACKAGES_TOKEN}</password>
               </server>

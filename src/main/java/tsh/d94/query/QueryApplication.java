@@ -1,4 +1,4 @@
-package tsh.d94.app.server;
+package tsh.d94.query;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -7,15 +7,15 @@ import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 @SpringBootApplication(scanBasePackages = {
-	"tsh.d94.lib.core", "tsh.d94.app.server"
+	"tsh.d94.lib.core", "tsh.d94.query"
 })
 @EntityScan(basePackages = {"tsh.d94.lib.core", "tsh.d94.app.server"})
-@EnableJpaRepositories(basePackages = {"tsh.d94.lib.core", "tsh.d94.app.server"})
+@EnableJpaRepositories(basePackages = {"tsh.d94.lib.core", "tsh.d94.query"})
 @EnableCaching
-class D94QueryApplication {
+class QueryApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(D94QueryApplication.class, args);
+		SpringApplication.run(QueryApplication.class, args);
 	}
 
 }
