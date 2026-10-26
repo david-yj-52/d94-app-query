@@ -1,6 +1,6 @@
 services:
   app-server:
-    image: ghcr.io/david-yj-52/d94-query:${IMAGE_TAG:-latest}
+    image: ghcr.io/david-yj-52/d94-app-query:${IMAGE_TAG:-latest}
     container_name: d94-query
     restart: unless-stopped
     ports:
