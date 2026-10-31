@@ -17,6 +17,9 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       CACHE_TYPE: ${CACHE_TYPE:-simple}
 
+      # 로그 표시 시간대만 (log4j2-spring.xml). JVM 에 TZ 를 넣지 않는다 — LocalDateTime·TIMESTAMP 저장값이 UTC 기준이라
+      LOG_TZ: ${LOG_TZ:-America/New_York}
+
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       NEXT_PUBLIC_URL: ${NEXT_PUBLIC_URL:-*}
       AUTH_CREDENTIAL_PRIVATE_KEY: ${AUTH_CREDENTIAL_PRIVATE_KEY:-}

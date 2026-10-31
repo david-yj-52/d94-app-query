@@ -217,7 +217,7 @@ sequenceDiagram
 | Docker 네트워크 | compose 가 external `CLOUD_NETWORK_NAME`(`befw-cloud-network`)·`DB_NETWORK_NAME`(`tsh-network`) 에 붙음 |
 | Swagger UI  | `/swagger-ui.html`                                                                |
 | API Docs    | `/v3/api-docs`                                                                    |
-| 로그 설정   | `log4j2-spring.xml`                                                               |
+| 로그 설정   | `log4j2-spring.xml`. 표시 시간대는 env `LOG_TZ`(기본 UTC, compose 기본 `America/New_York`). JVM `TZ` 는 바꾸지 않음 |
 | 버전 주입   | Maven Resource Filtering (`@project.version@`, `@module-name@`, `@service-name@`) |
 
 ---

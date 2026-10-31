@@ -2,7 +2,9 @@
 <Configuration status="WARN" monitorInterval="30">
 
     <Properties>
-        <Property name="LOG_PATTERN">%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n</Property>
+        <!-- 로그 표시 시간대만 바꾼다 (env LOG_TZ, 기본 UTC). JVM·DB 시간대는 UTC 유지 — LocalDateTime 저장값이 어긋나지 않도록 -->
+        <Property name="LOG_TZ">${env:LOG_TZ:-UTC}</Property>
+        <Property name="LOG_PATTERN">%d{yyyy-MM-dd HH:mm:ss.SSS}{${LOG_TZ}} [%t] %-5level %logger{36} - %msg%n</Property>
         <Property name="LOG_DIR">logs</Property>
         <Property name="APP_NAME">d94-query</Property>
     </Properties>
