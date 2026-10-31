@@ -14,6 +14,7 @@ import tsh.d94.app.server.data.orm.cira.ciraNotifPref.SnCiraNotifPrefAccess;
 import tsh.d94.app.server.data.orm.cira.ciraNotifPref.SnCiraNotifPrefModel;
 import tsh.d94.app.server.data.orm.cira.ciraNotification.SnCiraNotificationAccess;
 import tsh.d94.app.server.data.orm.cira.ciraNotification.SnCiraNotificationModel;
+import tsh.d94.lib.core.data.orm.common.tenant.TenantContext;
 import tsh.d94.lib.core.config.ApplicationProperties;
 import tsh.d94.lib.core.data.constant.UseStatCd;
 import tsh.d94.lib.core.data.orm.usersAndPermissions.gsUser.GsUserAccess;
@@ -45,7 +46,7 @@ public class NotificationService {
 			.resourceId(resourceId)
 			.readYn("N")
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("NOTIFICATION")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("SendNotification")
@@ -120,7 +121,7 @@ public class NotificationService {
 						.eventType(item.getEventType())
 						.enabledYn(item.isEnabled() ? "Y" : "N")
 						.srvId(ApplicationProperties.getApplicationServiceName())
-						.tenant(ApplicationProperties.getApplicationTenant())
+						.tenant(TenantContext.get())
 						.traceId("NOTIF-PREF")
 						.useStatCd(UseStatCd.Usable)
 						.evtNm("CreatePref")

@@ -22,6 +22,7 @@ import tsh.d94.app.server.data.orm.cira.ciraCommentReaction.SnCiraCommentReactio
 import tsh.d94.app.server.data.orm.cira.ciraCommentReaction.SnCiraCommentReactionModel;
 import tsh.d94.app.server.data.orm.cira.ciraIssue.SnCiraIssueAccess;
 import tsh.d94.app.server.data.orm.cira.ciraIssue.SnCiraIssueModel;
+import tsh.d94.lib.core.data.orm.common.tenant.TenantContext;
 import tsh.d94.lib.core.apService.auth.dto.UserResponse;
 import tsh.d94.lib.core.config.ApplicationProperties;
 import tsh.d94.lib.core.data.constant.UseStatCd;
@@ -65,7 +66,7 @@ public class CommentService {
 			.parentId(request.getParentId())
 			.content(request.getContent())
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("CREATE-COMMENT")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("CreateComment")
@@ -204,7 +205,7 @@ public class CommentService {
 				.userId(user.getObjId())
 				.reactionType(request.getReactionType())
 				.srvId(ApplicationProperties.getApplicationServiceName())
-				.tenant(ApplicationProperties.getApplicationTenant())
+				.tenant(TenantContext.get())
 				.traceId("ADD-REACTION")
 				.useStatCd(UseStatCd.Usable)
 				.evtNm("AddReaction")

@@ -157,6 +157,18 @@ sequenceDiagram
 - 설정: `application.security.credential.{private-key, max-age-seconds, allow-plaintext}` ← `AUTH_CREDENTIAL_PRIVATE_KEY`, `AUTH_CREDENTIAL_MAX_AGE_SECONDS`, `AUTH_CREDENTIAL_ALLOW_PLAINTEXT`
 - 테스트: `CredentialCryptoServiceTest`(d94-web 모듈이 만든 픽스처 `src/test/resources/credential/web-envelope-fixture.json` 복호화 포함 — 픽스처 키는 테스트 전용), `EncryptedCredentialBodyAdviceTest`
 
+### Tenant 결정
+
+| 경로 | tenant 출처 | 설정·해제 |
+|---|---|---|
+| HTTP (JWT) | 로그인 사용자 `GS_USER.TENANT` (`D94UserDetails.tenant`). 토큰에는 tenant 를 싣지 않음 | lib-core `JwtAuthenticationFilter` — 요청 끝에 `clear()` |
+| 메시지 (`AbstractApService`) | 메시지 본문 `ApMessageBody.tenant` | `execute()` 끝에 이전 값 복원 |
+| `@Async("automationTaskExecutor")` | 호출 스레드의 tenant | `AsyncConfig.tenantPropagatingDecorator` |
+| Git 웹훅 (`GitWebhookService`) | JWT 없음 → 아직 `ApplicationProperties.getApplicationTenant()` | — |
+
+- CIRA 저장 코드는 `.tenant(TenantContext.get())` 를 쓴다 (조회·저장 tenant 일치).
+- 회원가입 tenant 배정·등급 ACL 은 미구현. 설계: workspace `note/feature/user/1_tenant/`
+
 ### DTO
 
 | 클래스            | 방향 | 용도                                 |
@@ -236,7 +248,7 @@ sequenceDiagram
 | 8  | `TestController` 운영 비활성화 방안    | 운영 환경 노출 제어 미정의                                                        |
 | 9  | HTTP 인증·인가                         | lib-core `SecurityConfig`(JWT, `/api/v1/auth/**` permitAll). 역할은 USER 고정(TODO). 로그인·가입 본문은 암호화 필수 |
 | 10 | `SolaceMessageInfoVo.msgObject` 보관   | `BytesXMLMessage` 직접 보관 시 메모리 해제 정책 미정의                            |
-| 11 | `AbstractCrudService.findById` (lib-core) | `TenantContext` 를 채우는 곳이 없어 HTTP 요청에서 항상 실패(500). ifTest 는 tenant 를 인자로 받는 Repo 메서드로 우회 |
+| 11 | ~~HTTP 요청 tenant 미설정~~ (해결) | lib-core `JwtAuthenticationFilter` 가 로그인 사용자 `GS_USER.TENANT` 로 `TenantContext` 를 채우고 요청 끝에 비움 (아래 "Tenant 결정"). ifTest 의 tenant 인자 Repo 메서드는 그대로 둠 |
 | 12 | 패키지 선언 ↔ 폴더 불일치               | 파일은 `tsh/d94/query/**` 폴더, 선언은 `tsh.d94.app.server.*`. 스캔에 두 패키지를 모두 넣어 동작은 함 |
 | 13 | 기존 테스트 실패 2건                    | `AuthControllerTest`(@SpringBootConfiguration 못 찾음), `CommentServiceTest`(UnnecessaryStubbing) |
 | 14 | 토큰 없는 보호 API 호출                 | 401 이 아니라 403 응답 (SecurityConfig 에 AuthenticationEntryPoint 없음) |

@@ -25,6 +25,7 @@ import tsh.d94.app.server.data.orm.cira.ciraProject.SnCiraProjectAccess;
 import tsh.d94.app.server.data.orm.cira.ciraProjectMember.SnCiraProjectMemberAccess;
 import tsh.d94.app.server.data.orm.cira.ciraSprint.SnCiraSprintAccess;
 import tsh.d94.app.server.data.orm.cira.ciraSprint.SnCiraSprintModel;
+import tsh.d94.lib.core.data.orm.common.tenant.TenantContext;
 import tsh.d94.lib.core.config.ApplicationProperties;
 import tsh.d94.lib.core.data.constant.UseStatCd;
 import tsh.d94.lib.core.data.orm.usersAndPermissions.gsUser.GsUserAccess;
@@ -66,7 +67,7 @@ public class SprintService {
 			.endDt(request.getEndDt())
 			.sprintStat(STAT_PLANNED)
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("CREATE-SPRINT")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("CreateSprint")

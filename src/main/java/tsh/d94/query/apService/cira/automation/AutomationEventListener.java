@@ -19,6 +19,7 @@ import tsh.d94.app.server.data.orm.cira.ciraAutoRule.SnCiraAutoRuleAccess;
 import tsh.d94.app.server.data.orm.cira.ciraAutoRule.SnCiraAutoRuleModel;
 import tsh.d94.app.server.data.orm.cira.ciraIssue.SnCiraIssueAccess;
 import tsh.d94.app.server.data.orm.cira.ciraIssue.SnCiraIssueModel;
+import tsh.d94.lib.core.data.orm.common.tenant.TenantContext;
 import tsh.d94.lib.core.config.ApplicationProperties;
 import tsh.d94.lib.core.data.constant.UseStatCd;
 
@@ -142,7 +143,7 @@ public class AutomationEventListener {
 			.executedAt(OffsetDateTime.now())
 			.errMsg(errMsg)
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("AUTOMATION")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("AutoExecution")

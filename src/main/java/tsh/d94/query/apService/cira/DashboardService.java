@@ -35,6 +35,7 @@ import tsh.d94.app.server.data.orm.cira.ciraSprint.SnCiraSprintAccess;
 import tsh.d94.app.server.data.orm.cira.ciraSprint.SnCiraSprintModel;
 import tsh.d94.app.server.data.orm.cira.ciraSprintMetrics.SnCiraSprintMetricsAccess;
 import tsh.d94.app.server.data.orm.cira.ciraSprintMetrics.SnCiraSprintMetricsModel;
+import tsh.d94.lib.core.data.orm.common.tenant.TenantContext;
 import tsh.d94.lib.core.config.ApplicationProperties;
 import tsh.d94.lib.core.data.constant.UseStatCd;
 import tsh.d94.lib.core.data.orm.usersAndPermissions.gsUser.GsUserAccess;
@@ -342,7 +343,7 @@ public class DashboardService {
 			.complStoryPnt(completed)
 			.velocity(completed)
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("COMPUTE-METRICS")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("ComputeSprintMetrics")
