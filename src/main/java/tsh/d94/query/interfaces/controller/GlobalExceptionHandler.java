@@ -9,6 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import tsh.d94.app.server.apService.auth.CredentialInvalidException;
 import tsh.d94.app.server.apService.cira.cql.CqlParseException;
 import tsh.d94.app.server.apService.cira.exception.CiraException;
 import tsh.d94.lib.core.interfaces.rest.ApiResponse;
@@ -39,6 +40,14 @@ public class GlobalExceptionHandler {
 		log.warn("Authentication failed: {}", e.getMessage());
 		return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
 			.body(ApiResponse.error("AUTH_INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다."));
+	}
+
+	@ExceptionHandler(CredentialInvalidException.class)
+	public ResponseEntity<ApiResponse<Void>> handleCredentialInvalid(CredentialInvalidException e) {
+		// 사유(만료·재사용·키 불일치)는 로그에만 남긴다
+		log.warn("Encrypted credential rejected: {}", e.getMessage());
+		return ResponseEntity.badRequest()
+			.body(ApiResponse.error("AUTH_CREDENTIAL_INVALID", "로그인 정보를 처리할 수 없습니다. 다시 시도해주세요."));
 	}
 
 	@ExceptionHandler(EntityNotFoundException.class)
