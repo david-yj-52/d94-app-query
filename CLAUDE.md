@@ -139,8 +139,23 @@ sequenceDiagram
 | `MessageServerConfigController` | `/mdm/msg-server-config` | 메시징 서버 설정 CRUD |
 | `ConfigManageController`        | `/mdm/config`            | 설정 관리             |
 | `MessageOutboundController`     | `/util/message-outbound` | 메시지 수동 발행 유틸 |
+| `AuthController`                | `/api/v1/auth`           | lib-core `BaseAuthController`(register·login·refresh·logout) + `GET /public-key`. login·register 본문은 암호화 봉투 `{enc}` 만 받음 (아래 "자격 증명 암호화") |
 | `InterfaceTestController`       | `/api/v1/interface-tests` | 인터페이스(통신) 테스트 CRUD — GET·HEAD·POST(201)·PUT·PATCH·DELETE(204) |
 | `GlobalExceptionHandler`        | —                        | 전역 예외 처리        |
+
+### 자격 증명 암호화 (로그인·회원가입)
+
+설계: d94-web `docs/decisions/0004-credential-encryption.md`
+
+| 클래스 | 역할 |
+|---|---|
+| `apService/auth/CredentialCryptoService` | RSA 키(`AUTH_CREDENTIAL_PRIVATE_KEY`, 없으면 임시 키) 보관, 공개키·`kid` 제공, 봉투 복호화(RSA-OAEP SHA-256/MGF1-SHA256 + AES-256-GCM, AAD `d94-auth:v1:{login\|register}`), `ts` 허용 범위(`max-age-seconds`, 기본 300)·`nonce` 재사용(인메모리) 검사 |
+| `interfaces/controller/auth/EncryptedCredentialBodyAdvice` | `RequestBodyAdvice`. `LoginRequest`·`RegisterRequest` 본문 `{enc}` 를 lib-core 로 넘기기 전에 평문 JSON 으로 교체. 평문 본문은 `allow-plaintext=false` 면 거절 |
+| `apService/auth/CredentialInvalidException` | → `GlobalExceptionHandler` 400 `AUTH_CREDENTIAL_INVALID` (사유는 로그에만) |
+
+- 비밀번호 저장은 lib-core `AuthService.register` 의 BCrypt(12) 그대로. lib-core 는 수정하지 않음.
+- 설정: `application.security.credential.{private-key, max-age-seconds, allow-plaintext}` ← `AUTH_CREDENTIAL_PRIVATE_KEY`, `AUTH_CREDENTIAL_MAX_AGE_SECONDS`, `AUTH_CREDENTIAL_ALLOW_PLAINTEXT`
+- 테스트: `CredentialCryptoServiceTest`(d94-web 모듈이 만든 픽스처 `src/test/resources/credential/web-envelope-fixture.json` 복호화 포함 — 픽스처 키는 테스트 전용), `EncryptedCredentialBodyAdviceTest`
 
 ### DTO
 
@@ -202,7 +217,7 @@ sequenceDiagram
 | Docker 네트워크 | compose 가 external `CLOUD_NETWORK_NAME`(`befw-cloud-network`)·`DB_NETWORK_NAME`(`tsh-network`) 에 붙음 |
 | Swagger UI  | `/swagger-ui.html`                                                                |
 | API Docs    | `/v3/api-docs`                                                                    |
-| 로그 설정   | `log4j2-spring.xml`                                                               |
+| 로그 설정   | `log4j2-spring.xml`. 표시 시간대는 env `LOG_TZ`(기본 UTC, compose 기본 `America/New_York`). JVM `TZ` 는 바꾸지 않음 |
 | 버전 주입   | Maven Resource Filtering (`@project.version@`, `@module-name@`, `@service-name@`) |
 
 ---
@@ -219,7 +234,7 @@ sequenceDiagram
 | 6  | `resultAction()` 응답 객체             | `MessageServerConfigApService.resultAction()` `null` 반환 (TODO 주석)             |
 | 7  | Custom 예외 처리                       | `AbstractApService.execute()`에 TODO 주석 (`ApService custom exception required`) |
 | 8  | `TestController` 운영 비활성화 방안    | 운영 환경 노출 제어 미정의                                                        |
-| 9  | HTTP 인증·인가                         | Security 설정 없음 (`google-api-client` 존재하나 미연결)                          |
+| 9  | HTTP 인증·인가                         | lib-core `SecurityConfig`(JWT, `/api/v1/auth/**` permitAll). 역할은 USER 고정(TODO). 로그인·가입 본문은 암호화 필수 |
 | 10 | `SolaceMessageInfoVo.msgObject` 보관   | `BytesXMLMessage` 직접 보관 시 메모리 해제 정책 미정의                            |
 | 11 | `AbstractCrudService.findById` (lib-core) | `TenantContext` 를 채우는 곳이 없어 HTTP 요청에서 항상 실패(500). ifTest 는 tenant 를 인자로 받는 Repo 메서드로 우회 |
 | 12 | 패키지 선언 ↔ 폴더 불일치               | 파일은 `tsh/d94/query/**` 폴더, 선언은 `tsh.d94.app.server.*`. 스캔에 두 패키지를 모두 넣어 동작은 함 |
