@@ -1,6 +1,7 @@
 package tsh.d94.app.server.apService.cira;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -10,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 import tsh.d94.app.server.apService.cira.dto.NotificationPreferenceRequest;
 import tsh.d94.app.server.apService.cira.dto.NotificationPreferenceResponse;
 import tsh.d94.app.server.apService.cira.dto.NotificationResponse;
+import tsh.d94.app.server.data.orm.cira.ciraIssue.SnCiraIssueAccess;
+import tsh.d94.app.server.data.orm.cira.ciraIssue.SnCiraIssueModel;
 import tsh.d94.app.server.data.orm.cira.ciraNotifPref.SnCiraNotifPrefAccess;
 import tsh.d94.app.server.data.orm.cira.ciraNotifPref.SnCiraNotifPrefModel;
 import tsh.d94.app.server.data.orm.cira.ciraNotification.SnCiraNotificationAccess;
@@ -29,7 +32,10 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class NotificationService {
 
+	private static final String RESOURCE_TYPE_ISSUE = "ISSUE";
+
 	private final SnCiraNotificationAccess notificationAccess;
+	private final SnCiraIssueAccess issueAccess;
 	private final SnCiraNotifPrefAccess prefAccess;
 	private final SseEmitterService sseEmitterService;
 	private final GsUserAccess userAccess;
@@ -60,9 +66,10 @@ public class NotificationService {
 
 	public List<NotificationResponse> getNotifications() {
 		String userId = currentUserId();
-		return notificationAccess.findRecentByUserId(userId)
-			.stream()
-			.map(this::mapToResponse)
+		List<SnCiraNotificationModel> notifications = notificationAccess.findRecentByUserId(userId);
+		Map<String, String> issueKeys = issueKeysOf(notifications);
+		return notifications.stream()
+			.map(n -> mapToResponse(n, issueKeys))
 			.collect(Collectors.toList());
 	}
 
@@ -140,7 +147,26 @@ public class NotificationService {
 		return user.getObjId();
 	}
 
+	/** ISSUE 알림의 resourceId(이슈 objId) → issueKey. 목록 조회는 한 번의 쿼리로 모아서 찾는다 */
+	private Map<String, String> issueKeysOf(List<SnCiraNotificationModel> notifications) {
+		List<String> issueIds = notifications.stream()
+			.filter(n -> RESOURCE_TYPE_ISSUE.equals(n.getResourceType()) && n.getResourceId() != null)
+			.map(SnCiraNotificationModel::getResourceId)
+			.distinct()
+			.collect(Collectors.toList());
+		if (issueIds.isEmpty()) {
+			return Map.of();
+		}
+		return issueAccess.findByIds(issueIds).stream()
+			.filter(i -> i.getIssueKey() != null)
+			.collect(Collectors.toMap(SnCiraIssueModel::getObjId, SnCiraIssueModel::getIssueKey));
+	}
+
 	private NotificationResponse mapToResponse(SnCiraNotificationModel model) {
+		return mapToResponse(model, issueKeysOf(List.of(model)));
+	}
+
+	private NotificationResponse mapToResponse(SnCiraNotificationModel model, Map<String, String> issueKeys) {
 		return NotificationResponse.builder()
 			.id(model.getObjId())
 			.userId(model.getUserId())
@@ -149,6 +175,7 @@ public class NotificationService {
 			.message(model.getMsg())
 			.resourceType(model.getResourceType())
 			.resourceId(model.getResourceId())
+			.issueKey(RESOURCE_TYPE_ISSUE.equals(model.getResourceType()) ? issueKeys.get(model.getResourceId()) : null)
 			.read("Y".equals(model.getReadYn()))
 			.createdAt(model.getCreatedAt())
 			.build();
