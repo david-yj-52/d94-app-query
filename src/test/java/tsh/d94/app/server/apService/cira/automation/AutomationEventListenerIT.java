@@ -46,6 +46,7 @@ class AutomationEventListenerIT {
 		fixtures.user(email);
 		assignee = fixtures.user(CiraFixtures.uniqueEmail("auto-assignee"));
 		project = fixtures.project("KANBAN");
+		fixtures.member(project.getId(), assignee);
 	}
 
 	@AfterEach

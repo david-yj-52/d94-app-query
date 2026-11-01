@@ -35,7 +35,7 @@ public class SnCiraCommentModel extends BaseModel {
 	@Column(name = "PARENT_ID", length = 100)
 	private String parentId;
 
-	@Column(name = "CONTENT")
+	@Column(name = "CONTENT", columnDefinition = "text")
 	private String content;
 
 }

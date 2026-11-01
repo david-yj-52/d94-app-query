@@ -36,7 +36,7 @@ public class SnCiraProjectModel extends BaseModel {
 	@Column(name = "PROJECT_NM", length = 200, nullable = false)
 	private String projectNm;
 
-	@Column(name = "DESCR")
+	@Column(name = "DESCR", columnDefinition = "text")
 	private String descr;
 
 	@Column(name = "PROJECT_TYPE", length = 30, nullable = false)

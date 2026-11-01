@@ -2,6 +2,18 @@
 
 > 규칙·실행 방법: [testing.md](testing.md). 결함은 **보고만** 했고 운영 코드는 고치지 않았습니다. 결함 재현 테스트(`[Dn]`)는 결함이 고쳐질 때까지 실패하는 것이 정상입니다.
 
+## 0. 수정 이력
+
+| 일시 | 해결한 결함 | 변경 | 확인한 테스트 |
+|---|---|---|---|
+| 2026-11-01 | **D3** 이슈 생성 500 | lib-core `AbstractCrudService.findByIdOptional(null)` → 리포지토리를 부르지 않고 empty (`AbstractCrudServiceTest`). `createIssue` 가 상태 미지정 시 프로젝트 첫 상태(sortOrd 최소)를 쓰고, 다른 프로젝트의 상태는 거절 | `IssueServiceIT` › `[D3 재현]…`, `IssueServiceTest` › `[D3]…` |
+| 2026-11-01 | **D7** 이슈 유형 없음 | Flyway `V320` 이 기본 유형(Task·Bug·Story·Epic) 시드, 유형 미지정 시 Task. 목록 API `GET /api/v1/issue-types` 추가 | `IssueServiceIT` › `[D7]…` |
+| 2026-11-01 | **D1** (백엔드 쪽) 이메일이 담당자로 저장 | `createIssue` 가 담당자를 프로젝트의 Usable 멤버 objId 인지 확인, 아니면 400 | `IssueServiceIT` › `[D1 재현]…`, `IssueServiceTest` › `[D1]…` |
+| 2026-11-01 | **D5** 255자 제한 | `V320` 이 이슈·댓글 내용, 알림 메시지, 프로젝트·PR 설명, 커밋 메시지(+ `*_HIST`)를 `text` 로, 엔티티에 `columnDefinition = "text"` | `IssueServiceIT`·`CommentServiceIT` › `[D5 재현]…` (스키마 자료형 차이 54 → 48) |
+| 2026-11-01 | **D25** 제목 검증 없음 | `CreateIssueRequest.title` `@NotBlank` + 컨트롤러 `@Valid` | `IssueControllerTest` › `[D25]…` |
+
+웹 쪽 확인: d94-web 상태 필터 우려(d94-web D12)는 결함이 아니다. Spring 은 `status[]=a` 와 `status=a` 를 모두 목록으로 받는다 (`IssueControllerTest` › `list_statusFilterBinding`).
+
 ## 1. 실행 정보
 
 - 일시: 2026-10-31 22:59 (America/New_York), 명령: `mvn clean verify -Dmaven.test.failure.ignore=true`

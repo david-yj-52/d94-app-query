@@ -42,7 +42,7 @@ public class SnCiraGitPrModel extends BaseModel {
 	@Column(name = "TITLE", length = 500, nullable = false)
 	private String title;
 
-	@Column(name = "DESCR")
+	@Column(name = "DESCR", columnDefinition = "text")
 	private String descr;
 
 	@Column(name = "PR_STAT", length = 20, nullable = false)

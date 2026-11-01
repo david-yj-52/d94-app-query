@@ -18,6 +18,7 @@ import tsh.d94.app.server.apService.cira.dto.ChangeStatusRequest;
 import tsh.d94.app.server.apService.cira.dto.CreateIssueRequest;
 import tsh.d94.app.server.apService.cira.dto.IssueFilterRequest;
 import tsh.d94.app.server.apService.cira.dto.IssueResponse;
+import tsh.d94.app.server.apService.cira.dto.IssueTypeResponse;
 import tsh.d94.app.server.apService.cira.dto.IssueStatusResponse;
 import tsh.d94.app.server.apService.cira.dto.UpdateIssueRequest;
 import tsh.d94.lib.core.interfaces.rest.ApiResponse;
@@ -35,7 +36,7 @@ public class IssueController {
 	@PostMapping("/projects/{projectId}/issues")
 	public ApiResponse<IssueResponse> createIssue(
 		@PathVariable String projectId,
-		@RequestBody CreateIssueRequest request
+		@Valid @RequestBody CreateIssueRequest request
 	) {
 		return ApiResponse.ok(issueService.createIssue(projectId, request));
 	}
@@ -79,5 +80,11 @@ public class IssueController {
 	@GetMapping("/issues/{issueId}/available-transitions")
 	public ApiResponse<List<IssueStatusResponse>> getAvailableTransitions(@PathVariable String issueId) {
 		return ApiResponse.ok(issueService.getAvailableTransitions(issueId));
+	}
+
+	/** 이슈 생성 화면의 유형 선택용 (전역 목록) */
+	@GetMapping("/issue-types")
+	public ApiResponse<List<IssueTypeResponse>> getIssueTypes() {
+		return ApiResponse.ok(issueService.getIssueTypes());
 	}
 }

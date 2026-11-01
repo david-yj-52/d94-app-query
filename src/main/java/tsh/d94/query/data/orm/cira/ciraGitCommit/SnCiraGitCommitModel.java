@@ -39,7 +39,7 @@ public class SnCiraGitCommitModel extends BaseModel {
 	@Column(name = "COMMIT_HASH", length = 40, nullable = false)
 	private String commitHash;
 
-	@Column(name = "MSG")
+	@Column(name = "MSG", columnDefinition = "text")
 	private String msg;
 
 	@Column(name = "AUTHOR_NM", length = 100)

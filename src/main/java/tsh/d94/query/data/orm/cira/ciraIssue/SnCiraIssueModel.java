@@ -42,7 +42,7 @@ public class SnCiraIssueModel extends BaseModel {
 	@Column(name = "TITLE", length = 500, nullable = false)
 	private String title;
 
-	@Column(name = "CONTENT")
+	@Column(name = "CONTENT", columnDefinition = "text")
 	private String content;
 
 	@Column(name = "ISSUE_TYPE_ID", length = 100, nullable = false)

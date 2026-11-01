@@ -60,6 +60,13 @@ public class CiraFixtures {
 		return projectService.createProject(request);
 	}
 
+	/** 사용자를 프로젝트 멤버(DEVELOPER)로 추가. 현재 로그인 사용자가 그 프로젝트 ADMIN 이어야 한다 */
+	public GsUserModel member(String projectId, GsUserModel user) {
+		projectService.addMember(projectId,
+			new tsh.d94.app.server.apService.cira.dto.AddMemberRequest(user.getEmail(), "DEVELOPER"));
+		return user;
+	}
+
 	/** 이슈 유형 (전역 테이블·이름 유니크, 기본 시드 없음 → 없으면 만들고 있으면 재사용) */
 	public String issueType(String typeNm) {
 		java.util.List<String> existing = jdbc.queryForList(

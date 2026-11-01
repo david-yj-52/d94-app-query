@@ -51,6 +51,7 @@ class IssueServiceIT {
 		reporter = fixtures.user(reporterEmail);
 		assignee = fixtures.user(CiraFixtures.uniqueEmail("assignee"));
 		project = fixtures.project("SCRUM");
+		fixtures.member(project.getId(), assignee);
 		todoStatusId = fixtures.statusId(project.getId(), "To Do");
 		taskTypeId = fixtures.issueType("Task");
 	}
@@ -161,6 +162,26 @@ class IssueServiceIT {
 
 		assertThat(jdbc.queryForObject("select issue_sequence from sn_cira_project where obj_id = ?",
 			Integer.class, project.getId())).isZero();
+	}
+
+	@Test
+	@DisplayName("[D7] Flyway V320 이 기본 이슈 유형을 넣고, 목록 API 가 이를 돌려준다")
+	void issueTypes_seededAndListed() {
+		assertThat(issueService.getIssueTypes())
+			.extracting(tsh.d94.app.server.apService.cira.dto.IssueTypeResponse::getTypeNm)
+			.contains("Bug", "Epic", "Story", "Task");
+	}
+
+	@Test
+	@DisplayName("다른 프로젝트의 상태로는 만들 수 없다")
+	void createIssue_withForeignStatus_isRejected() {
+		ProjectResponse other = fixtures.project("KANBAN");
+		CreateIssueRequest req = webRequest(null);
+		req.setStatusId(fixtures.statusId(other.getId(), "To Do"));
+
+		assertThatThrownBy(() -> issueService.createIssue(project.getId(), req))
+			.isInstanceOf(IllegalArgumentException.class);
+		assertThat(issueCount()).isZero();
 	}
 
 	@Test

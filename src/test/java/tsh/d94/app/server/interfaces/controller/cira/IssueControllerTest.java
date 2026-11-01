@@ -97,11 +97,11 @@ class IssueControllerTest {
 	}
 
 	/**
-	 * 웹(axios 기본 직렬화)은 배열을 status[]=a&status[]=b 로 보낸다 (d94-web test-report D12).
+	 * axios 기본 직렬화(status[]=a&status[]=b)와 반복 키(status=a&status=b) 모두 받는지 고정 (d94-web test-report D12 확인용).
 	 * 백엔드가 어떤 형식을 받는지 고정해 두는 계약 테스트.
 	 */
 	@Test
-	@DisplayName("상태 필터: status=a&status=b 는 목록으로 바인딩, status[]=a 형식은 바인딩되지 않는다 (웹은 반복 키로 보내야 함)")
+	@DisplayName("상태 필터: status=a&status=b 와 status[]=a&status[]=b 모두 목록으로 바인딩된다")
 	void list_statusFilterBinding() throws Exception {
 		given(issueService.listIssues(eq("p-1"), any(), any()))
 			.willReturn(new PageImpl<>(List.of(), org.springframework.data.domain.PageRequest.of(0, 20), 0));
@@ -114,7 +114,7 @@ class IssueControllerTest {
 
 		then(issueService).should(times(2)).listIssues(eq("p-1"), filter.capture(), any());
 		org.assertj.core.api.Assertions.assertThat(filter.getAllValues().get(0).getStatus()).containsExactly("s-1", "s-2");
-		org.assertj.core.api.Assertions.assertThat(filter.getAllValues().get(1).getStatus()).isNullOrEmpty();
+		org.assertj.core.api.Assertions.assertThat(filter.getAllValues().get(1).getStatus()).containsExactly("s-1", "s-2");
 	}
 
 	@Test

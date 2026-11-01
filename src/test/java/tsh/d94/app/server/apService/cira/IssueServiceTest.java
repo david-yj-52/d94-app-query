@@ -166,6 +166,62 @@ class IssueServiceTest {
 	@DisplayName("createIssue")
 	class Create {
 
+		@BeforeEach
+		void workflowAndTypes() {
+			SnCiraIssueStatusModel todo = status(TODO, "To Do");
+			todo.setSortOrd((short)1);
+			todo.setUseStatCd(tsh.d94.lib.core.data.constant.UseStatCd.Usable);
+			SnCiraIssueStatusModel done = status(DONE, "Done");
+			done.setSortOrd((short)4);
+			done.setUseStatCd(tsh.d94.lib.core.data.constant.UseStatCd.Usable);
+			given(statusAccess.findByProjectId(PROJECT_ID)).willReturn(List.of(done, todo));
+			tsh.d94.app.server.data.orm.cira.ciraCiraIssueType.SnCiraCiraIssueTypeModel task =
+				new tsh.d94.app.server.data.orm.cira.ciraCiraIssueType.SnCiraCiraIssueTypeModel();
+			org.springframework.test.util.ReflectionTestUtils.setField(task, "objId", "type-task");
+			given(issueTypeAccess.findByTypeNm("Task")).willReturn(Optional.of(task));
+		}
+
+		@Test
+		@DisplayName("[D3] 상태·유형을 안 보내면 첫 상태(sortOrd 최소)·기본 유형 Task 로 만든다")
+		void defaultsStatusAndType() {
+			CreateIssueRequest req = request();
+			req.setStatusId(null);
+
+			issueService.createIssue(PROJECT_ID, req);
+
+			ArgumentCaptor<SnCiraIssueModel> saved = ArgumentCaptor.forClass(SnCiraIssueModel.class);
+			then(issueAccess).should().save(saved.capture());
+			assertThat(saved.getValue().getStatusId()).isEqualTo(TODO);
+			assertThat(saved.getValue().getIssueTypeId()).isEqualTo("type-task");
+		}
+
+		@Test
+		@DisplayName("다른 프로젝트의 상태 id 는 거절")
+		void foreignStatus_rejected() {
+			CreateIssueRequest req = request();
+			req.setStatusId("status-of-other-project");
+
+			assertThatThrownBy(() -> issueService.createIssue(PROJECT_ID, req))
+				.isInstanceOf(IllegalArgumentException.class);
+			then(issueAccess).should(never()).save(any());
+		}
+
+		@Test
+		@DisplayName("프로젝트 멤버인 담당자는 저장된다")
+		void memberAssignee_saved() {
+			SnCiraProjectMemberModel other = new SnCiraProjectMemberModel();
+			other.setUseStatCd(tsh.d94.lib.core.data.constant.UseStatCd.Usable);
+			given(projectMemberAccess.findByProjectIdAndUserId(PROJECT_ID, OTHER)).willReturn(Optional.of(other));
+			CreateIssueRequest req = request();
+			req.setAssigneeId(OTHER);
+
+			issueService.createIssue(PROJECT_ID, req);
+
+			ArgumentCaptor<SnCiraIssueModel> saved = ArgumentCaptor.forClass(SnCiraIssueModel.class);
+			then(issueAccess).should().save(saved.capture());
+			assertThat(saved.getValue().getAssigneeId()).isEqualTo(OTHER);
+		}
+
 		private CreateIssueRequest request() {
 			CreateIssueRequest req = new CreateIssueRequest();
 			req.setTitle("새 이슈");

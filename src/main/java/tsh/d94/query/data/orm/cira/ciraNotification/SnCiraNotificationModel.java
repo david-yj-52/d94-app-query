@@ -35,7 +35,7 @@ public class SnCiraNotificationModel extends BaseModel {
 	@Column(name = "TITLE", length = 300, nullable = false)
 	private String title;
 
-	@Column(name = "MSG")
+	@Column(name = "MSG", columnDefinition = "text")
 	private String msg;
 
 	@Column(name = "RESOURCE_TYPE", length = 50)

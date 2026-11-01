@@ -21,6 +21,7 @@ import tsh.d94.app.server.apService.cira.dto.ChangeStatusRequest;
 import tsh.d94.app.server.apService.cira.dto.CreateIssueRequest;
 import tsh.d94.app.server.apService.cira.dto.IssueFilterRequest;
 import tsh.d94.app.server.apService.cira.dto.IssueResponse;
+import tsh.d94.app.server.apService.cira.dto.IssueTypeResponse;
 import tsh.d94.app.server.apService.cira.dto.IssueStatusResponse;
 import tsh.d94.app.server.apService.cira.dto.UpdateIssueRequest;
 import tsh.d94.app.server.apService.cira.exception.CiraException;
@@ -58,6 +59,9 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class IssueService {
 
+	/** 이슈 유형을 지정하지 않았을 때의 기본값 (Flyway V320 시드) */
+	private static final String DEFAULT_ISSUE_TYPE = "Task";
+
 	private final SnCiraIssueAccess issueAccess;
 	private final SnCiraProjectAccess projectAccess;
 	private final GsUserAccess userAccess;
@@ -86,6 +90,10 @@ public class IssueService {
 			.findFirst()
 			.orElseThrow(() -> new IllegalArgumentException("User is not a member of the project"));
 
+		String statusId = resolveStatusId(projectId, request.getStatusId());
+		String issueTypeId = resolveIssueTypeId(request.getIssueTypeId());
+		validateAssignee(projectId, request.getAssigneeId());
+
 		// Increment sequence and generate key
 		project.setIssueSequence(project.getIssueSequence() + 1);
 		projectAccess.save(project);
@@ -97,8 +105,8 @@ public class IssueService {
 			.issueKey(issueKey)
 			.title(request.getTitle())
 			.content(request.getContent())
-			.issueTypeId(request.getIssueTypeId())
-			.statusId(request.getStatusId())
+			.issueTypeId(issueTypeId)
+			.statusId(statusId)
 			.priority(request.getPriority())
 			.storyPnt(request.getStoryPnt())
 			.assigneeId(request.getAssigneeId())
@@ -342,6 +350,58 @@ public class IssueService {
 		};
 
 		return issueAccess.findAll(spec, pageable).map(this::mapToResponse);
+	}
+
+	/** 선택 가능한 이슈 유형 (전역, 이름순) */
+	public List<IssueTypeResponse> getIssueTypes() {
+		return issueTypeAccess.findAllUsable().stream()
+			.map(t -> IssueTypeResponse.builder()
+				.id(t.getObjId())
+				.typeNm(t.getTypeNm())
+				.icon(t.getIcon())
+				.colorCd(t.getColorCd())
+				.descr(t.getDescr())
+				.build())
+			.collect(Collectors.toList());
+	}
+
+	/** 상태 미지정 → 프로젝트 워크플로우의 첫 상태(sortOrd 최소). 지정했으면 이 프로젝트의 상태인지 확인 */
+	private String resolveStatusId(String projectId, String statusId) {
+		List<SnCiraIssueStatusModel> statuses = statusAccess.findByProjectId(projectId).stream()
+			.filter(s -> UseStatCd.Usable.equals(s.getUseStatCd()))
+			.collect(Collectors.toList());
+		if (statusId == null) {
+			return statuses.stream()
+				.min(java.util.Comparator.comparing(SnCiraIssueStatusModel::getSortOrd))
+				.map(SnCiraIssueStatusModel::getObjId)
+				.orElseThrow(() -> new IllegalArgumentException("프로젝트에 이슈 상태가 없습니다: " + projectId));
+		}
+		if (statuses.stream().noneMatch(s -> statusId.equals(s.getObjId()))) {
+			throw new IllegalArgumentException("이 프로젝트의 이슈 상태가 아닙니다: " + statusId);
+		}
+		return statusId;
+	}
+
+	/** 유형 미지정 → 기본 유형 Task (Flyway V320 시드). 지정했으면 존재하는지 확인 */
+	private String resolveIssueTypeId(String issueTypeId) {
+		if (issueTypeId == null) {
+			return issueTypeAccess.findByTypeNm(DEFAULT_ISSUE_TYPE)
+				.map(SnCiraCiraIssueTypeModel::getObjId)
+				.orElseThrow(() -> new IllegalArgumentException("기본 이슈 유형이 없습니다: " + DEFAULT_ISSUE_TYPE));
+		}
+		issueTypeAccess.findByIdOptional(issueTypeId)
+			.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 이슈 유형입니다: " + issueTypeId));
+		return issueTypeId;
+	}
+
+	/** 담당자는 이 프로젝트의 (제거되지 않은) 멤버의 사용자 objId 여야 한다. 이메일 등은 거절 */
+	private void validateAssignee(String projectId, String assigneeId) {
+		if (assigneeId == null) {
+			return;
+		}
+		projectMemberAccess.findByProjectIdAndUserId(projectId, assigneeId)
+			.filter(m -> UseStatCd.Usable.equals(m.getUseStatCd()))
+			.orElseThrow(() -> new IllegalArgumentException("담당자가 프로젝트 멤버가 아닙니다: " + assigneeId));
 	}
 
 	private String resolveColumnId(String projectId, String statusId) {

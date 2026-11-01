@@ -42,6 +42,7 @@ class CommentServiceIT {
 		reporter = fixtures.user(reporterEmail);
 		assignee = fixtures.user(CiraFixtures.uniqueEmail("assignee"));
 		ProjectResponse project = fixtures.project("KANBAN");
+		fixtures.member(project.getId(), assignee);
 		issue = fixtures.issue(project.getId(), "댓글 대상", assignee.getObjId());
 	}
 
