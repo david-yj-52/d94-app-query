@@ -20,6 +20,7 @@ import tsh.d94.app.server.data.orm.cira.ciraMilestone.SnCiraMilestoneModel;
 import tsh.d94.app.server.data.orm.cira.ciraMilestoneIssue.SnCiraMilestoneIssueAccess;
 import tsh.d94.app.server.data.orm.cira.ciraMilestoneIssue.SnCiraMilestoneIssueModel;
 import tsh.d94.app.server.data.orm.cira.ciraProject.SnCiraProjectAccess;
+import tsh.d94.lib.core.data.orm.common.tenant.TenantContext;
 import tsh.d94.lib.core.config.ApplicationProperties;
 import tsh.d94.lib.core.data.constant.UseStatCd;
 
@@ -52,7 +53,7 @@ public class MilestoneService {
 			.dueDt(request.getDueDate())
 			.status(request.getStatus() != null ? request.getStatus() : STAT_OPEN)
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("CREATE-MILESTONE")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("CreateMilestone")
@@ -169,7 +170,7 @@ public class MilestoneService {
 			.milestoneId(milestoneId)
 			.issueId(issueId)
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("ADD-MILESTONE-ISSUE")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("AddIssueToMilestone")

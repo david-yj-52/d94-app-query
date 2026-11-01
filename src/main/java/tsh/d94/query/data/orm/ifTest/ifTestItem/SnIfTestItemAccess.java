@@ -13,8 +13,8 @@ import tsh.d94.lib.core.data.orm.common.repo.BaseJpaRepository;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 조회는 tenant 를 인자로 받는다. AbstractCrudService.findById 는 TenantContext 가 비어 있으면 실패하는데,
- * HTTP 요청 경로에서 TenantContext 를 채우는 곳이 아직 없다.
+ * 조회는 tenant 를 인자로 받는다. TenantContext 가 HTTP 요청에서 채워지기 전에 만든 우회 방식이며,
+ * 지금은 JwtAuthenticationFilter 가 로그인 사용자 tenant 를 채우므로 AbstractCrudService 기본 조회로 바꿔도 된다.
  */
 @Slf4j
 @Service

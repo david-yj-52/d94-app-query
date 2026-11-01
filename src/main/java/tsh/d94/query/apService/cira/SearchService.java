@@ -26,6 +26,7 @@ import tsh.d94.app.server.data.orm.cira.ciraIssueStatus.SnCiraIssueStatusAccess;
 import tsh.d94.app.server.data.orm.cira.ciraSavedFilter.SnCiraSavedFilterAccess;
 import tsh.d94.app.server.data.orm.cira.ciraSavedFilter.SnCiraSavedFilterModel;
 import tsh.d94.app.server.data.orm.cira.ciraSprint.SnCiraSprintAccess;
+import tsh.d94.lib.core.data.orm.common.tenant.TenantContext;
 import tsh.d94.lib.core.apService.auth.dto.UserResponse;
 import tsh.d94.lib.core.config.ApplicationProperties;
 import tsh.d94.lib.core.data.constant.UseStatCd;
@@ -72,7 +73,7 @@ public class SearchService {
 			.jqlQuery(serializeParams(request.getFilterParams()))
 			.sharedYn("N")
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("SAVED-FILTER")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("SaveFilter")
@@ -105,7 +106,7 @@ public class SearchService {
 
 	public List<AutocompleteResponse> autocomplete(String type, String keyword) {
 		String kw = keyword == null ? "" : keyword.toLowerCase();
-		String tenant = ApplicationProperties.getApplicationTenant();
+		String tenant = TenantContext.get();
 		return switch (type.toUpperCase()) {
 			case "ASSIGNEE", "USER" -> userAccess.searchByKeyword(kw).stream()
 				.map(u -> AutocompleteResponse.builder()

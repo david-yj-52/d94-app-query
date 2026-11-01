@@ -33,6 +33,7 @@ import tsh.d94.app.server.data.orm.cira.ciraIssuePosition.SnCiraIssuePositionMod
 import tsh.d94.app.server.data.orm.cira.ciraIssueStatus.SnCiraIssueStatusAccess;
 import tsh.d94.app.server.data.orm.cira.ciraIssueStatus.SnCiraIssueStatusModel;
 import tsh.d94.app.server.data.orm.cira.ciraProjectMember.SnCiraProjectMemberAccess;
+import tsh.d94.lib.core.data.orm.common.tenant.TenantContext;
 import tsh.d94.lib.core.apService.auth.dto.UserResponse;
 import tsh.d94.lib.core.config.ApplicationProperties;
 import tsh.d94.lib.core.data.constant.UseStatCd;
@@ -64,7 +65,7 @@ public class BoardService {
 			.boardNm(request.getBoardNm())
 			.boardType(request.getBoardType() != null ? request.getBoardType() : "KANBAN")
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("CREATE-BOARD")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("CreateBoard")
@@ -134,7 +135,7 @@ public class BoardService {
 			.wipLimit(request.getWipLimit())
 			.sortOrd(nextOrd)
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("ADD-COLUMN")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("AddColumn")
@@ -226,7 +227,7 @@ public class BoardService {
 				.columnId(request.getTargetColumnId())
 				.rankStr(newRank)
 				.srvId(ApplicationProperties.getApplicationServiceName())
-				.tenant(ApplicationProperties.getApplicationTenant())
+				.tenant(TenantContext.get())
 				.traceId("MOVE-ISSUE")
 				.useStatCd(UseStatCd.Usable)
 				.evtNm("MoveIssue")

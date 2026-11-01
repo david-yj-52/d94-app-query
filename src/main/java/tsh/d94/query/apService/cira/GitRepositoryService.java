@@ -23,6 +23,7 @@ import tsh.d94.app.server.data.orm.cira.ciraGitCommit.SnCiraGitCommitAccess;
 import tsh.d94.app.server.data.orm.cira.ciraGitPr.SnCiraGitPrAccess;
 import tsh.d94.app.server.data.orm.cira.ciraGitRepo.SnCiraGitRepoAccess;
 import tsh.d94.app.server.data.orm.cira.ciraGitRepo.SnCiraGitRepoModel;
+import tsh.d94.lib.core.data.orm.common.tenant.TenantContext;
 import tsh.d94.lib.core.config.ApplicationProperties;
 import tsh.d94.lib.core.data.constant.UseStatCd;
 
@@ -82,7 +83,7 @@ public class GitRepositoryService {
 			.webhookSecret(webhookSecret)
 			.accessTokenEnc(encToken)
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("REGISTER-GIT-REPO")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("RegisterGitRepo")

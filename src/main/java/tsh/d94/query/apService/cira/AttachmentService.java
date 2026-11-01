@@ -21,6 +21,7 @@ import tsh.d94.app.server.data.orm.cira.ciraIssueLog.SnCiraIssueLogAccess;
 import tsh.d94.app.server.data.orm.cira.ciraIssueLog.SnCiraIssueLogModel;
 import tsh.d94.app.server.data.orm.cira.ciraProjectMember.SnCiraProjectMemberAccess;
 import tsh.d94.app.server.service.StorageService;
+import tsh.d94.lib.core.data.orm.common.tenant.TenantContext;
 import tsh.d94.lib.core.config.ApplicationProperties;
 import tsh.d94.lib.core.data.constant.UseStatCd;
 import tsh.d94.lib.core.data.orm.usersAndPermissions.gsUser.GsUserAccess;
@@ -69,7 +70,7 @@ public class AttachmentService {
 			.mimeType(file.getContentType())
 			.uploadedBy(uploader.getObjId())
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("UPLOAD-ATTACHMENT")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("UploadAttachment")
@@ -159,7 +160,7 @@ public class AttachmentService {
 			.changedBy(changerId)
 			.changedAt(LocalDateTime.now())
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("ATTACHMENT-LOG")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("RecordLog")

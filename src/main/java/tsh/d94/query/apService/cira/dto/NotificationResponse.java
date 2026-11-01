@@ -20,6 +20,8 @@ public class NotificationResponse {
 	private String message;
 	private String resourceType;
 	private String resourceId;
+	/** resourceType 이 ISSUE 일 때 이슈 키 (예: CIRA-15). 이슈가 없으면 null */
+	private String issueKey;
 	private boolean read;
 	private LocalDateTime createdAt;
 

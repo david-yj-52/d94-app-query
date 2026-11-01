@@ -18,6 +18,7 @@ import tsh.d94.app.server.data.orm.cira.ciraWikiPage.SnCiraWikiPageAccess;
 import tsh.d94.app.server.data.orm.cira.ciraWikiPage.SnCiraWikiPageModel;
 import tsh.d94.app.server.data.orm.cira.ciraWikiPageVer.SnCiraWikiPageVerAccess;
 import tsh.d94.app.server.data.orm.cira.ciraWikiPageVer.SnCiraWikiPageVerModel;
+import tsh.d94.lib.core.data.orm.common.tenant.TenantContext;
 import tsh.d94.lib.core.config.ApplicationProperties;
 import tsh.d94.lib.core.data.constant.UseStatCd;
 import tsh.d94.lib.core.data.orm.usersAndPermissions.gsUser.GsUserAccess;
@@ -81,7 +82,7 @@ public class WikiService {
 			.sortOrder(request.getSortOrder() != null ? request.getSortOrder() : 0)
 			.version(1)
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("CREATE-WIKI-PAGE")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("CreateWikiPage")
@@ -115,7 +116,7 @@ public class WikiService {
 			.editedBy(editor.getObjId())
 			.editedAt(OffsetDateTime.now())
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("UPDATE-WIKI-PAGE")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("SaveWikiPageVersion")

@@ -43,6 +43,8 @@ public abstract class AbstractApService<R, T extends ApMessageBody> implements A
 	// pre → main → post 순차 호출
 	private ApiResponse<R> execute(ApProcessVo<T> procVo) {
 
+		// HTTP 경로(HttpTaskReceiver)에서는 JwtAuthenticationFilter 가 이미 tenant 를 걸어 두므로 끝나면 이전 값으로 되돌린다
+		String prevTenant = TenantContext.getOrNull();
 		TenantContext.set(procVo.getTenant());
 
 		try {
@@ -63,6 +65,12 @@ public abstract class AbstractApService<R, T extends ApMessageBody> implements A
 			// TODO ApService custom exception required
 		} catch (Exception e) {
 			throw new RuntimeException(e);
+		} finally {
+			if (prevTenant == null) {
+				TenantContext.clear();
+			} else {
+				TenantContext.set(prevTenant);
+			}
 		}
 	}
 

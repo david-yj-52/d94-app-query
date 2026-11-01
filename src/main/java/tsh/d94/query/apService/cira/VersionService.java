@@ -28,6 +28,7 @@ import tsh.d94.app.server.data.orm.cira.ciraIssueVersion.SnCiraIssueVersionModel
 import tsh.d94.app.server.data.orm.cira.ciraProject.SnCiraProjectAccess;
 import tsh.d94.app.server.data.orm.cira.ciraVersion.SnCiraVersionAccess;
 import tsh.d94.app.server.data.orm.cira.ciraVersion.SnCiraVersionModel;
+import tsh.d94.lib.core.data.orm.common.tenant.TenantContext;
 import tsh.d94.lib.core.config.ApplicationProperties;
 import tsh.d94.lib.core.data.constant.UseStatCd;
 
@@ -64,7 +65,7 @@ public class VersionService {
 			.status(request.getStatus() != null ? request.getStatus() : STAT_UNRELEASED)
 			.planRelDt(request.getPlanRelDt())
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("CREATE-VERSION")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("CreateVersion")
@@ -231,7 +232,7 @@ public class VersionService {
 			.versionId(versionId)
 			.relType(type)
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("LINK-ISSUE-VERSION")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("LinkIssueToVersion")

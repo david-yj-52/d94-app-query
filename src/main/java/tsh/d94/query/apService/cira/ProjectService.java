@@ -30,6 +30,7 @@ import tsh.d94.app.server.data.orm.cira.ciraProject.SnCiraProjectAccess;
 import tsh.d94.app.server.data.orm.cira.ciraProject.SnCiraProjectModel;
 import tsh.d94.app.server.data.orm.cira.ciraProjectMember.SnCiraProjectMemberAccess;
 import tsh.d94.app.server.data.orm.cira.ciraProjectMember.SnCiraProjectMemberModel;
+import tsh.d94.lib.core.data.orm.common.tenant.TenantContext;
 import tsh.d94.lib.core.config.ApplicationProperties;
 import tsh.d94.lib.core.data.constant.UseStatCd;
 import tsh.d94.lib.core.data.orm.usersAndPermissions.gsUser.GsUserAccess;
@@ -68,7 +69,7 @@ public class ProjectService {
 			.ownerId(owner.getObjId())
 			.issueSequence(0)
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("INIT-PROJ")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("CreateProject")
@@ -83,7 +84,7 @@ public class ProjectService {
 			.userId(owner.getObjId())
 			.role("ADMIN")
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("INIT-PROJ")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("AddOwner")
@@ -115,7 +116,7 @@ public class ProjectService {
 			.boardNm("Default Board")
 			.boardType(projectType != null ? projectType : "KANBAN")
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("INIT-PROJ")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("CreateDefaultBoard")
@@ -138,7 +139,7 @@ public class ProjectService {
 			.colorCd(colorCd)
 			.sortOrd(sortOrd)
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("INIT-PROJ")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("CreateStatus")
@@ -155,7 +156,7 @@ public class ProjectService {
 			.toStatusId(toStatusId)
 			.allowYn("Y")
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("INIT-PROJ")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("CreateTransition")
@@ -171,7 +172,7 @@ public class ProjectService {
 			.columnNm(columnNm)
 			.sortOrd(sortOrd)
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("INIT-PROJ")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("CreateBoardColumn")
@@ -275,7 +276,7 @@ public class ProjectService {
 			.userId(targetUser.getObjId())
 			.role(role)
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("PROJ-MEMBER-ADD")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("AddMember")
@@ -363,7 +364,7 @@ public class ProjectService {
 			.colorCd(request.getColorCd())
 			.sortOrd(request.getSortOrd() != null ? request.getSortOrd() : (short)99)
 			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(ApplicationProperties.getApplicationTenant())
+			.tenant(TenantContext.get())
 			.traceId("PROJ-STATUS-ADD")
 			.useStatCd(UseStatCd.Usable)
 			.evtNm("AddStatus")
@@ -422,7 +423,7 @@ public class ProjectService {
 					.toStatusId(item.getToStatusId())
 					.allowYn("Y")
 					.srvId(ApplicationProperties.getApplicationServiceName())
-					.tenant(ApplicationProperties.getApplicationTenant())
+					.tenant(TenantContext.get())
 					.traceId("PROJ-TRANS-UPDATE")
 					.useStatCd(UseStatCd.Usable)
 					.evtNm("UpdateTransition")
