@@ -62,7 +62,9 @@ jobs:
           EOF
 
       - name: Maven Build
-        run: mvn clean package -DskipTests
+        # -U: 캐시(cache: maven)에 남은 옛 d94-lib-core SNAPSHOT 대신 GitHub Packages 최신본을 받는다
+        #     (SNAPSHOT 기본 갱신 주기가 하루라, lib-core 를 막 배포해도 옛 jar 로 컴파일될 수 있음)
+        run: mvn -U clean package -DskipTests
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           # Repository Settings > Secrets and variables > Actions 에 read:packages(+ write:packages)

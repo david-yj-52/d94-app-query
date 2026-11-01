@@ -268,3 +268,4 @@ sequenceDiagram
 | 12 | 패키지 선언 ↔ 폴더 불일치               | 파일은 `tsh/d94/query/**` 폴더, 선언은 `tsh.d94.app.server.*`. 스캔에 두 패키지를 모두 넣어 동작은 함 |
 | 13 | ~~기존 테스트 실패 2건~~ (해결)          | `AuthControllerTest` → `AuthControllerIT`(테스트 진입점 `D94QueryTestApplication` + Testcontainers), `CommentServiceTest` 불필요 stub 제거. 지금 실패하는 테스트는 의도된 결함 재현 테스트(`[Dn]`) → `docs/test-report.md` |
 | 14 | 토큰 없는 보호 API 호출                 | 401 이 아니라 403 응답 (SecurityConfig 에 AuthenticationEntryPoint 없음) |
+| 15 | d94-lib-core 배포 순서                  | CI 는 GitHub Packages 의 lib-core SNAPSHOT 으로 빌드하고, lib-core 는 **`deploy` 브랜치 push 때만** 배포된다. lib-core `main` 의 새 API 를 쓰는 커밋은 lib-core `deploy` 배포가 끝난 뒤에 d94-query `deploy` 로 올릴 것 (2026-11-01 `TenantContext.getOrNull()` 미배포로 빌드 실패). `deploy.yml` 은 캐시된 옛 SNAPSHOT 을 피하려고 `mvn -U` 사용 |
