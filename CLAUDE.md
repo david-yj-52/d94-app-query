@@ -234,6 +234,22 @@ sequenceDiagram
 
 ---
 
+## 테스트
+
+상세: [docs/testing.md](docs/testing.md) · 결과·결함 목록: [docs/test-report.md](docs/test-report.md) · 작성 규칙 요약: [src/test/CLAUDE.md](src/test/CLAUDE.md)
+
+| 계층 | 이름 | 실행 | 내용 |
+|---|---|---|---|
+| 단위 | `XxxTest` | `mvn test` | JUnit 5 + Mockito. 로직 클래스 1:1 (apService·automation·cql·controller) |
+| 통합 | `XxxIT` | `mvn verify` | `@IntegrationTest` + Testcontainers `postgres:16`. Flyway 적용 스키마에서 실제 SQL·커밋·DB 행 검증 |
+| 리포트 | — | `mvn verify -Dmaven.test.failure.ignore=true` | JaCoCo `target/site/jacoco-merged`, SpotBugs `target/spotbugsXml.xml`, `target/schema-drift.txt`, `target/repository-queries.txt` |
+
+- 테스트 위치는 **선언 패키지** 기준 `src/test/java/tsh/d94/app/server/**` (미정의 #12 참고).
+- 통합 테스트는 Docker 가 필요하다. `src/test/resources/docker-java.properties`(`api.version=1.44`)가 Docker Engine 29 호환을 맞춘다.
+- `[Dn]` 이 붙은 테스트는 결함 재현용이라 결함이 고쳐질 때까지 실패한다. CI 는 `-DskipTests` 라 배포를 막지 않는다.
+
+---
+
 ## 미정의 항목 (정의 필요)
 
 | #  | 항목                                   | 현재 상태                                                                         |
@@ -250,5 +266,5 @@ sequenceDiagram
 | 10 | `SolaceMessageInfoVo.msgObject` 보관   | `BytesXMLMessage` 직접 보관 시 메모리 해제 정책 미정의                            |
 | 11 | ~~HTTP 요청 tenant 미설정~~ (해결) | lib-core `JwtAuthenticationFilter` 가 로그인 사용자 `GS_USER.TENANT` 로 `TenantContext` 를 채우고 요청 끝에 비움 (아래 "Tenant 결정"). ifTest 의 tenant 인자 Repo 메서드는 그대로 둠 |
 | 12 | 패키지 선언 ↔ 폴더 불일치               | 파일은 `tsh/d94/query/**` 폴더, 선언은 `tsh.d94.app.server.*`. 스캔에 두 패키지를 모두 넣어 동작은 함 |
-| 13 | 기존 테스트 실패 2건                    | `AuthControllerTest`(@SpringBootConfiguration 못 찾음), `CommentServiceTest`(UnnecessaryStubbing) |
+| 13 | ~~기존 테스트 실패 2건~~ (해결)          | `AuthControllerTest` → `AuthControllerIT`(테스트 진입점 `D94QueryTestApplication` + Testcontainers), `CommentServiceTest` 불필요 stub 제거. 지금 실패하는 테스트는 의도된 결함 재현 테스트(`[Dn]`) → `docs/test-report.md` |
 | 14 | 토큰 없는 보호 API 호출                 | 401 이 아니라 403 응답 (SecurityConfig 에 AuthenticationEntryPoint 없음) |
