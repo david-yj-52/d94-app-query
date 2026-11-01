@@ -1,0 +1,27 @@
+# 통합 테스트 프로필 (@IntegrationTest). datasource 는 Testcontainers @ServiceConnection 이 채운다.
+spring:
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+  flyway:
+    # 테스트 DB 는 매번 새 컨테이너라 clean 이 필요 없다
+    clean-disabled: true
+
+eureka:
+  client:
+    enabled: false
+
+application:
+  security:
+    jwt:
+      # 테스트 전용 값 (HS256 최소 길이 이상). 운영 비밀값과 무관
+      secret-key: dGVzdC1vbmx5LWp3dC1zZWNyZXQta2V5LWZvci1kOTQtcXVlcnktaW50ZWdyYXRpb24tdGVzdHM=
+    credential:
+      allow-plaintext: true
+
+logging:
+  level:
+    org.hibernate.SQL: WARN
+    org.hibernate.orm.jdbc.bind: WARN

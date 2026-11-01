@@ -65,7 +65,7 @@ class CommentServiceTest {
 		SnCiraIssueModel deletedIssue = issueModel(ISSUE_ID, ISSUE_KEY);
 		deletedIssue.setDeletedAt(java.time.LocalDateTime.now());
 
-		given(userAccess.findByEmail(USER_EMAIL)).willReturn(Optional.of(userModel(USER_ID)));
+		// 삭제 여부를 먼저 검사하므로 사용자 조회까지 가지 않는다 (stub 하면 UnnecessaryStubbing)
 		given(issueAccess.findById(ISSUE_ID)).willReturn(deletedIssue);
 
 		assertThatThrownBy(() -> commentService.getComments(ISSUE_ID))

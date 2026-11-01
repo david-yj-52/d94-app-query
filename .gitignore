@@ -35,7 +35,11 @@ application-local.properties
 application-*.yml
 !application.yml
 !application-prod.yml
+# 통합 테스트 프로필 (테스트 전용 값만, 비밀값 없음)
+!src/test/resources/application-test.yml
 HELP.md
+# 테스트·로컬 실행 시 log4j2 가 만드는 로그
+logs/
 
 # ===== OS 관련 =====
 .DS_Store

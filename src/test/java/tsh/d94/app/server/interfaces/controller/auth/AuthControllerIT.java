@@ -8,22 +8,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import tsh.d94.app.server.support.IntegrationTest;
 import tsh.d94.lib.core.apService.auth.AuthService;
 import tsh.d94.lib.core.apService.auth.dto.LoginRequest;
 import tsh.d94.lib.core.apService.auth.dto.LoginResponse;
 import tsh.d94.lib.core.apService.auth.dto.RegisterRequest;
 
-@SpringBootTest
+/** 전체 컨텍스트 기동 + 인증 엔드포인트 배선. 평문 본문은 test 프로필의 allow-plaintext=true 로 허용 */
+@IntegrationTest
 @AutoConfigureMockMvc
-@ActiveProfiles("test")
-class AuthControllerTest {
+class AuthControllerIT {
 
 	@Autowired
 	private MockMvc mockMvc;
