@@ -1,5 +1,6 @@
 package tsh.d94.app.server.apService.cira;
 
+import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -99,12 +100,16 @@ public class AttachmentService {
 			.collect(Collectors.toList());
 	}
 
-	public String getDownloadUrl(String attachmentId) {
+	public SnCiraAttachmentModel getAttachmentForDownload(String attachmentId) {
 		SnCiraAttachmentModel attachment = attachmentAccess.findById(attachmentId);
 		if (attachment.getUseStatCd() == UseStatCd.Delete) {
 			throw new CiraException(ErrorCode.ISSUE_NOT_FOUND, "첨부파일을 찾을 수 없습니다: " + attachmentId);
 		}
-		return storageService.generatePresignedUrl(attachment.getS3Key());
+		return attachment;
+	}
+
+	public InputStream getObjectStream(String s3Key) {
+		return storageService.getObjectStream(s3Key);
 	}
 
 	@Transactional
