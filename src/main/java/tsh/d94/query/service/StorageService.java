@@ -9,6 +9,7 @@ import org.springframework.web.multipart.MultipartFile;
 import tsh.d94.app.server.config.StorageProperties;
 
 import io.minio.BucketExistsArgs;
+import io.minio.GetObjectArgs;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
@@ -60,6 +61,20 @@ public class StorageService {
 		} catch (Exception e) {
 			log.error("MinIO presigned URL generation failed: key={}", s3Key, e);
 			throw new RuntimeException("다운로드 URL 생성에 실패했습니다: " + e.getMessage(), e);
+		}
+	}
+
+	public InputStream getObjectStream(String s3Key) {
+		try {
+			return minioClient.getObject(
+				GetObjectArgs.builder()
+					.bucket(storageProperties.getBucket())
+					.object(s3Key)
+					.build()
+			);
+		} catch (Exception e) {
+			log.error("MinIO getObject failed: key={}", s3Key, e);
+			throw new RuntimeException("파일 조회에 실패했습니다: " + e.getMessage(), e);
 		}
 	}
 
