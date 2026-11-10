@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import tsh.d94.app.server.apService.auth.CredentialInvalidException;
 import tsh.d94.app.server.apService.cira.cql.CqlParseException;
 import tsh.d94.app.server.apService.cira.exception.CiraException;
+import tsh.d94.app.server.apService.study.exception.StudyException;
 import tsh.d94.lib.core.interfaces.rest.ApiResponse;
 
 import jakarta.persistence.EntityNotFoundException;
@@ -25,6 +26,13 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ApiResponse<Void>> handleCiraException(CiraException e) {
 		log.warn("Cira domain error [{}]: {}", e.getErrorCode().getCode(), e.getMessage());
 		return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+			.body(ApiResponse.error(e.getErrorCode().getCode(), e.getMessage()));
+	}
+
+	@ExceptionHandler(StudyException.class)
+	public ResponseEntity<ApiResponse<Void>> handleStudyException(StudyException e) {
+		log.warn("Study error [{}]: {}", e.getErrorCode().getCode(), e.getMessage());
+		return ResponseEntity.status(e.getErrorCode().getStatus())
 			.body(ApiResponse.error(e.getErrorCode().getCode(), e.getMessage()));
 	}
 

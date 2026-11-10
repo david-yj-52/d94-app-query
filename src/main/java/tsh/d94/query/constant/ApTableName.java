@@ -50,4 +50,12 @@ public class ApTableName {
 	public static final String SN_CIRA_WIKI_PAGE = "SN_CIRA_WIKI_PAGE";
 	public static final String SN_CIRA_WIKI_PAGE_VER = "SN_CIRA_WIKI_PAGE_VER";
 	public static final String SN_IF_TEST_ITEM = "SN_IF_TEST_ITEM";
+
+	// study (PDF 학습 뷰어)
+	public static final String SN_STUDY_DOCUMENT = "SN_STUDY_DOCUMENT";
+	public static final String SN_STUDY_UPLOAD = "SN_STUDY_UPLOAD";
+	public static final String SN_STUDY_SECTION = "SN_STUDY_SECTION";
+	public static final String SN_STUDY_BLOCK = "SN_STUDY_BLOCK";
+	public static final String SN_STUDY_TERM = "SN_STUDY_TERM";
+	public static final String SN_STUDY_ANNOTATION = "SN_STUDY_ANNOTATION";
 }

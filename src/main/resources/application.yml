@@ -1,3 +1,10 @@
+study:
+  parser:
+    # d94-app-pdf 는 gateway Path=/pdf/** 로 호출 (게이트웨이 → http://d94-pdf-parser:8080)
+    gateway-url: ${GATEWAY_URL:http://gateway-cloud-gateway-1:10001}
+    service-token: ${PDF_PARSER_SERVICE_TOKEN:}
+    timeout: 120s
+
 cira:
   storage:
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}

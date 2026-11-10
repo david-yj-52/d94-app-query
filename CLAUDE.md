@@ -140,6 +140,7 @@ sequenceDiagram
 | `ConfigManageController`        | `/mdm/config`            | 설정 관리             |
 | `MessageOutboundController`     | `/util/message-outbound` | 메시지 수동 발행 유틸 |
 | `AuthController`                | `/api/v1/auth`           | lib-core `BaseAuthController`(register·login·refresh·logout) + `GET /public-key`. login·register 본문은 암호화 봉투 `{enc}` 만 받음 (아래 "자격 증명 암호화") |
+| `StudyController`               | `/api/v1/study`          | PDF 학습 뷰어 — 분할 업로드(`documents/uploads`, 조각 768KB), 문서·목차·페이지·그림, 단어장(`terms`), 마킹·노트(`annotations`). 아래 "PDF 학습 뷰어" |
 | `InterfaceTestController`       | `/api/v1/interface-tests` | 인터페이스(통신) 테스트 CRUD — GET·HEAD·POST(201)·PUT·PATCH·DELETE(204) |
 | `GlobalExceptionHandler`        | —                        | 전역 예외 처리        |
 
@@ -156,6 +157,23 @@ sequenceDiagram
 - 비밀번호 저장은 lib-core `AuthService.register` 의 BCrypt(12) 그대로. lib-core 는 수정하지 않음.
 - 설정: `application.security.credential.{private-key, max-age-seconds, allow-plaintext}` ← `AUTH_CREDENTIAL_PRIVATE_KEY`, `AUTH_CREDENTIAL_MAX_AGE_SECONDS`, `AUTH_CREDENTIAL_ALLOW_PLAINTEXT`
 - 테스트: `CredentialCryptoServiceTest`(d94-web 모듈이 만든 픽스처 `src/test/resources/credential/web-envelope-fixture.json` 복호화 포함 — 픽스처 키는 테스트 전용), `EncryptedCredentialBodyAdviceTest`
+
+### PDF 학습 뷰어 (study)
+
+설계: d94-note `docs/superpowers/specs/2026-11-09-pdf-study-viewer-design.md`
+
+| 클래스 | 역할 |
+|---|---|
+| `apService/study/StudyUploadService` | UMD 본문 1MB 제한 때문에 768KB 조각을 MinIO `study/uploads/{id}/`에 받고, complete 때 이어 붙여 `study/docs/{docId}/source.pdf` 저장 → `StudyDocumentUploadedEvent` |
+| `apService/study/StudyParseService` | 커밋 후 `@Async("studyParseExecutor")`로 `PdfParserClient` 호출 → `StudyParseResultWriter`가 섹션·블록·그림 저장, READY/FAILED. 기동 시 남은 PARSING 은 FAILED("파싱이 중단되었습니다") |
+| `apService/study/parser/PdfParserClient` | `RestClient`로 `${GATEWAY_URL}/pdf/api/v1/parse` 호출, 헤더 `X-Service-Token`, 타임아웃 120초. 422 → 파서 message, 401 → "파싱 서버 인증 실패", 그 밖 → "파싱 서버 오류" |
+| `apService/study/StudyPageService` | 페이지 응답(블록·표 셀·개요·단어 위치·마킹)을 한 번에 구성. 단어 매칭은 `TermMatcher` |
+| `apService/study/StudyAnnotationService`, `AnnotationRange` | 마킹 범위 검증(UTF-16 오프셋, 같은 페이지 섹션)·quote, 노트 목록 |
+
+- 테이블 `SN_STUDY_{DOCUMENT,UPLOAD,SECTION,BLOCK,TERM,ANNOTATION}` (`V400`). `@Audited` 미사용, 삭제는 물리 삭제. 소유자 = 로그인 이메일(`OWNER_ID`), 남의 데이터는 404.
+- 설정: `study.parser.{gateway-url, service-token, timeout}` ← `GATEWAY_URL`, `PDF_PARSER_SERVICE_TOKEN`.
+- 파서 응답 형식은 `app/d94-app-pdf`의 `to_response()`와 짝(`ParserResponse`).
+- 테스트: `StudyLogicTest`, `StudyUploadServiceTest`, `StudyFlowIT`(파서·MinIO mock).
 
 ### Tenant 결정
 

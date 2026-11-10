@@ -61,6 +61,7 @@ Docker(Desktop)가 떠 있어야 통합 테스트가 돕니다. `postgres:16` �
 mvn test                                   # 단위만
 mvn verify -Dmaven.test.failure.ignore=true # 단위 + 통합 + JaCoCo + SpotBugs (결함 테스트가 있어도 리포트까지 진행)
 mvn verify -Dtest=NONE -Dsurefire.failIfNoSpecifiedTests=false -Dit.test=IssueServiceIT  # 통합 하나만
+mvn verify -Dtest=NONE -Dsurefire.failIfNoSpecifiedTests=false -Dit.test=StudyFlowIT    # PDF 학습 뷰어 흐름(파서·MinIO mock)
 mvn test -Dtest='Cql*Test'                 # 단위 일부
 ```
 
