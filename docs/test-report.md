@@ -55,7 +55,7 @@
 | CqlSearchService | 25.0% | 3.7% |
 | MilestoneService | 22.6% | 4.5% |
 | VersionService | 18.5% | 4.2% |
-| **아직 전용 테스트 없음**: DashboardService 0.4%, SearchService 0.5%, GitWebhookService 1.5%, GitRepositoryService 0.8%, AttachmentService 1.1%, SseEmitterService 16.2%, 컨트롤러 10개 (Sprint·Comment·Cql·Search·AutomationRule·Version·Milestone·Wiki·Dashboard·Attachment·Git) | | |
+| **아직 전용 테스트 없음**: DashboardService 0.4%, SearchService 0.5%, GitWebhookService 1.5%, GitRepositoryService 0.8%, SseEmitterService 16.2%, 컨트롤러 10개 (Sprint·Comment·Cql·Search·AutomationRule·Version·Milestone·Wiki·Dashboard·Git). AttachmentService(조각 업로드)·AttachmentController(동기 다운로드·Range) 는 단위 테스트 있음(2026-11-10) | | |
 
 ## 4. SpotBugs (`target/spotbugsXml.xml`, 전체 255건)
 

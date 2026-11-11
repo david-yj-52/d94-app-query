@@ -1,7 +1,11 @@
 package tsh.d94.app.server.apService.cira;
 
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.SequenceInputStream;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -12,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import tsh.d94.app.server.apService.cira.dto.AttachmentResponse;
+import tsh.d94.app.server.apService.cira.dto.StartAttachmentUploadResponse;
 import tsh.d94.app.server.apService.cira.exception.CiraException;
 import tsh.d94.app.server.apService.cira.exception.ErrorCode;
 import tsh.d94.app.server.data.orm.cira.ciraAttachment.SnCiraAttachmentAccess;
@@ -37,6 +42,9 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class AttachmentService {
 
+	public static final long MAX_FILE_BYTES = 52_428_800L; // 50MB
+	public static final int PART_SIZE = 786_432; // 768KB — UMD 요청 본문 1MB 미만
+
 	private final SnCiraAttachmentAccess attachmentAccess;
 	private final SnCiraIssueAccess issueAccess;
 	private final SnCiraProjectMemberAccess projectMemberAccess;
@@ -46,29 +54,128 @@ public class AttachmentService {
 
 	@Transactional
 	public AttachmentResponse upload(String issueId, MultipartFile file) {
-		String email = SecurityContextHolder.getContext().getAuthentication().getName();
-		GsUserModel uploader = userAccess.findByEmail(email)
-			.orElseThrow(() -> new EntityNotFoundException("User not found: " + email));
+		GsUserModel uploader = currentUser();
+		SnCiraIssueModel issue = memberIssue(issueId);
+		String sanitizedName = sanitizeFileName(file.getOriginalFilename());
+		String s3Key = newObjectKey(issue, sanitizedName);
+		storageService.upload(file, s3Key);
+		return saveAttachment(issue, uploader, sanitizedName, s3Key, file.getSize(), file.getContentType());
+	}
 
+	// ── 조각 업로드: UMD 요청 본문 상한(1MB) 때문에 PART_SIZE 로 나눠 받아 MinIO 에서 이어 붙인다 (Study 와 같은 방식)
+	// ponytail: 업로드 상태 테이블 없음 — uploadId(UUID)·MinIO 경로만 쓰고 메타는 complete 에서 다시 받는다.
+	//           완료되지 않은 조각 정리 스케줄러 없음, 쌓이면 추가.
+
+	public StartAttachmentUploadResponse startUpload(String issueId, long fileSize) {
+		memberIssue(issueId);
+		if (fileSize <= 0 || fileSize > MAX_FILE_BYTES) {
+			throw new CiraException(ErrorCode.ATTACHMENT_INVALID, "파일 크기는 50MB 이하여야 합니다.");
+		}
+		return new StartAttachmentUploadResponse(UUID.randomUUID().toString(), PART_SIZE, partCount(fileSize));
+	}
+
+	public void putPart(String issueId, String uploadId, int n, byte[] body) {
+		memberIssue(issueId);
+		if (n < 1 || n > partCount(MAX_FILE_BYTES) || body == null || body.length == 0 || body.length > PART_SIZE) {
+			throw new CiraException(ErrorCode.ATTACHMENT_INVALID, "잘못된 조각입니다.");
+		}
+		storageService.putBytes(partKey(issueId, uploadId, n), body, "application/octet-stream"); // 재전송은 덮어쓰기
+	}
+
+	@Transactional
+	public AttachmentResponse completeUpload(String issueId, String uploadId, String fileName, long fileSize, String mimeType) {
+		GsUserModel uploader = currentUser();
+		SnCiraIssueModel issue = memberIssue(issueId);
+		if (fileSize <= 0 || fileSize > MAX_FILE_BYTES) {
+			throw new CiraException(ErrorCode.ATTACHMENT_INVALID, "파일 크기는 50MB 이하여야 합니다.");
+		}
+		int count = partCount(fileSize);
+		List<Integer> missing = new ArrayList<>();
+		long total = 0;
+		for (int n = 1; n <= count; n++) {
+			long size = storageService.objectSize(partKey(issueId, uploadId, n));
+			if (size < 0) {
+				missing.add(n);
+			} else {
+				total += size;
+			}
+		}
+		if (!missing.isEmpty()) {
+			throw new CiraException(ErrorCode.ATTACHMENT_UPLOAD_INCOMPLETE,
+				"missing=" + missing.stream().map(String::valueOf).collect(Collectors.joining(",")));
+		}
+		if (total != fileSize) {
+			throw new CiraException(ErrorCode.ATTACHMENT_INVALID, "조각 크기의 합이 파일 크기와 다릅니다.");
+		}
+
+		String sanitizedName = sanitizeFileName(fileName);
+		String s3Key = newObjectKey(issue, sanitizedName);
+		try (InputStream in = new SequenceInputStream(parts(issueId, uploadId, count))) {
+			storageService.putStream(s3Key, in, fileSize, mimeType == null ? "application/octet-stream" : mimeType);
+		} catch (IOException e) {
+			throw new IllegalStateException("업로드 조각을 합치지 못했습니다.", e);
+		}
+		storageService.deletePrefix(uploadPrefix(issueId, uploadId));
+		return saveAttachment(issue, uploader, sanitizedName, s3Key, fileSize, mimeType);
+	}
+
+	static int partCount(long fileSize) {
+		return (int)((fileSize + PART_SIZE - 1) / PART_SIZE);
+	}
+
+	static String uploadPrefix(String issueId, String uploadId) {
+		return "attachments/uploads/" + issueId + "/" + uploadId + "/";
+	}
+
+	static String partKey(String issueId, String uploadId, int n) {
+		return uploadPrefix(issueId, uploadId) + String.format("part-%04d", n);
+	}
+
+	/** 조각 스트림을 하나씩 열어 넘긴다 (전부 메모리에 올리지 않는다) */
+	private Enumeration<InputStream> parts(String issueId, String uploadId, int count) {
+		return new Enumeration<>() {
+			private int next = 1;
+
+			public boolean hasMoreElements() {
+				return next <= count;
+			}
+
+			public InputStream nextElement() {
+				return storageService.getObjectStream(partKey(issueId, uploadId, next++));
+			}
+		};
+	}
+
+	private GsUserModel currentUser() {
+		String email = SecurityContextHolder.getContext().getAuthentication().getName();
+		return userAccess.findByEmail(email)
+			.orElseThrow(() -> new EntityNotFoundException("User not found: " + email));
+	}
+
+	/** 살아 있는 이슈 + 현재 사용자가 그 프로젝트 멤버인지 확인 */
+	private SnCiraIssueModel memberIssue(String issueId) {
+		GsUserModel user = currentUser();
 		SnCiraIssueModel issue = issueAccess.findById(issueId);
 		if (issue.getDeletedAt() != null) {
 			throw new CiraException(ErrorCode.ISSUE_NOT_FOUND, "이슈를 찾을 수 없습니다: " + issueId);
 		}
+		validateMembership(user.getObjId(), issue.getProjectId());
+		return issue;
+	}
 
-		validateMembership(uploader.getObjId(), issue.getProjectId());
+	private String newObjectKey(SnCiraIssueModel issue, String sanitizedName) {
+		return String.format("attachments/%s/%s/%s_%s",
+			issue.getProjectId(), issue.getObjId(), UUID.randomUUID(), sanitizedName);
+	}
 
-		String sanitizedName = sanitizeFileName(file.getOriginalFilename());
-		String s3Key = String.format("attachments/%s/%s/%s_%s",
-			issue.getProjectId(), issueId, UUID.randomUUID(), sanitizedName);
-
-		storageService.upload(file, s3Key);
-
+	private AttachmentResponse saveAttachment(SnCiraIssueModel issue, GsUserModel uploader, String sanitizedName,
+		String s3Key, long fileSize, String mimeType) {
 		SnCiraAttachmentModel attachment = SnCiraAttachmentModel.builder()
-			.issueId(issueId)
+			.issueId(issue.getObjId())
 			.fileNm(sanitizedName)
 			.s3Key(s3Key)
-			.fileSize(file.getSize())
-			.mimeType(file.getContentType())
+			.fileSize(fileSize)
+			.mimeType(mimeType)
 			.uploadedBy(uploader.getObjId())
 			.srvId(ApplicationProperties.getApplicationServiceName())
 			.tenant(TenantContext.get())
@@ -80,7 +187,7 @@ public class AttachmentService {
 
 		attachmentAccess.save(attachment);
 
-		recordLog(issueId, "attachment", null, sanitizedName, uploader.getObjId());
+		recordLog(issue.getObjId(), "attachment", null, sanitizedName, uploader.getObjId());
 
 		String downloadUrl = storageService.generatePresignedUrl(s3Key);
 		return mapToResponse(attachment, downloadUrl);
@@ -110,6 +217,10 @@ public class AttachmentService {
 
 	public InputStream getObjectStream(String s3Key) {
 		return storageService.getObjectStream(s3Key);
+	}
+
+	public InputStream getObjectStream(String s3Key, long offset, long length) {
+		return storageService.getObjectStream(s3Key, offset, length);
 	}
 
 	@Transactional

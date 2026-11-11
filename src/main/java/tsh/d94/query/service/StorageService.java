@@ -84,6 +84,23 @@ public class StorageService {
 		}
 	}
 
+	/** 객체의 [offset, offset+length) 구간 (HTTP Range 다운로드용) */
+	public InputStream getObjectStream(String s3Key, long offset, long length) {
+		try {
+			return minioClient.getObject(
+				GetObjectArgs.builder()
+					.bucket(storageProperties.getBucket())
+					.object(s3Key)
+					.offset(offset)
+					.length(length)
+					.build()
+			);
+		} catch (Exception e) {
+			log.error("MinIO getObject(range) failed: key={}", s3Key, e);
+			throw new RuntimeException("파일 조회에 실패했습니다: " + e.getMessage(), e);
+		}
+	}
+
 	public void delete(String s3Key) {
 		try {
 			minioClient.removeObject(

@@ -26,7 +26,9 @@ public enum ErrorCode {
 	VERSION_ISSUE_NOT_LINKED("CIRA_017", "해당 버전에 연결되지 않은 이슈입니다."),
 	MILESTONE_NOT_FOUND("CIRA_018", "존재하지 않는 마일스톤입니다."),
 	MILESTONE_ISSUE_ALREADY_LINKED("CIRA_019", "이미 해당 마일스톤에 포함된 이슈입니다."),
-	MILESTONE_ISSUE_NOT_LINKED("CIRA_020", "해당 마일스톤에 포함되지 않은 이슈입니다.");
+	MILESTONE_ISSUE_NOT_LINKED("CIRA_020", "해당 마일스톤에 포함되지 않은 이슈입니다."),
+	ATTACHMENT_INVALID("CIRA_021", "첨부 파일 요청이 올바르지 않습니다."),
+	ATTACHMENT_UPLOAD_INCOMPLETE("CIRA_022", "업로드되지 않은 조각이 있습니다.");
 
 	private final String code;
 	private final String defaultMessage;

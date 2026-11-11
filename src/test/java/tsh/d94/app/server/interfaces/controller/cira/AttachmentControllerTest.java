@@ -57,4 +57,35 @@ class AttachmentControllerTest {
 			.andExpect(content().bytes(new byte[] {1, 2, 3}));
 	}
 
+
+	@Test
+	@DisplayName("Range: bytes=1-2 → 206 + Content-Range, 해당 구간만 MinIO 에서 읽음")
+	void download_range() throws Exception {
+		SnCiraAttachmentModel att = mock(SnCiraAttachmentModel.class);
+		given(att.getFileNm()).willReturn("a.bin");
+		given(att.getMimeType()).willReturn("application/octet-stream");
+		given(att.getS3Key()).willReturn("k");
+		given(att.getFileSize()).willReturn(10L);
+		given(attachmentService.getAttachmentForDownload("a-1")).willReturn(att);
+		given(attachmentService.getObjectStream("k", 1L, 2L)).willReturn(new ByteArrayInputStream(new byte[] {5, 6}));
+
+		mvc.perform(get("/api/v1/attachments/a-1/download").header("Range", "bytes=1-2"))
+			.andExpect(status().isPartialContent())
+			.andExpect(header().string("Content-Range", "bytes 1-2/10"))
+			.andExpect(content().bytes(new byte[] {5, 6}));
+	}
+
+	@Test
+	@DisplayName("범위 밖 Range → 416")
+	void download_badRange() throws Exception {
+		SnCiraAttachmentModel att = mock(SnCiraAttachmentModel.class);
+		given(att.getFileNm()).willReturn("a.bin");
+		given(att.getMimeType()).willReturn("application/octet-stream");
+		given(att.getFileSize()).willReturn(10L);
+		given(attachmentService.getAttachmentForDownload("a-1")).willReturn(att);
+
+		mvc.perform(get("/api/v1/attachments/a-1/download").header("Range", "bytes=20-30"))
+			.andExpect(status().isRequestedRangeNotSatisfiable());
+	}
+
 }
