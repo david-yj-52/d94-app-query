@@ -86,15 +86,16 @@ public class AyaanService {
 			n.setMaxConcurrency(1);
 			return n;
 		});
+		// PUT replaces every nullable field (null clears it); NOT NULL columns keep their value on null
 		if (d.enabled() != null) t.setEnabled(d.enabled());
 		if (d.authMode() != null) t.setAuthMode(d.authMode());
-		if (d.planName() != null) t.setPlanName(d.planName());
-		if (d.apiKeyRef() != null) t.setApiKeyRef(d.apiKeyRef());
-		if (d.model() != null) t.setModel(d.model());
+		t.setPlanName(d.planName());
+		t.setApiKeyRef(d.apiKeyRef());
+		t.setModel(d.model());
 		if (d.maxConcurrency() != null) t.setMaxConcurrency(d.maxConcurrency());
-		if (d.fallbackResetRule() != null) t.setFallbackResetRule(d.fallbackResetRule());
-		if (d.budgetTokens() != null) t.setBudgetTokens(d.budgetTokens());
-		if (d.budgetPeriod() != null) t.setBudgetPeriod(d.budgetPeriod());
+		t.setFallbackResetRule(d.fallbackResetRule());
+		t.setBudgetTokens(d.budgetTokens());
+		t.setBudgetPeriod(d.budgetPeriod());
 		return toDto(toolAccess.save(t));
 	}
 
@@ -109,9 +110,10 @@ public class AyaanService {
 			n.setDefaultTool("CLAUDE");
 			return n;
 		});
+		// PUT replaces promptTemplate (null clears it); NOT NULL columns keep their value on null
 		if (d.workspacePath() != null) w.setWorkspacePath(d.workspacePath());
 		if (d.defaultTool() != null) w.setDefaultTool(d.defaultTool());
-		if (d.promptTemplate() != null) w.setPromptTemplate(d.promptTemplate());
+		w.setPromptTemplate(d.promptTemplate());
 		if (w.getWorkspacePath() == null) throw new IllegalArgumentException("workspacePath is required");
 		return toDto(workspaceAccess.save(w));
 	}

@@ -256,4 +256,16 @@ class AyaanInternalIT {
 			.andExpect(jsonPath("$.data.windowCd").value("FIVE_HOUR"));
 		mvc.perform(auth(get(BASE + "/quotas"), null)).andExpect(jsonPath("$.data[?(@.toolCd=='CLAUDE')]").exists());
 	}
+
+	@Test
+	void putToolAndWorkspaceNullClearsField() throws Exception {
+		String cd = "T" + uniq().substring(0, 8);
+		mvc.perform(auth(put(BASE + "/tools/" + cd), "{\"model\":\"opus\"}")).andExpect(status().isOk());
+		mvc.perform(auth(put(BASE + "/tools/" + cd), "{\"model\":null,\"enabled\":null}")).andExpect(status().isOk());
+		assertThat(jdbc.queryForObject("SELECT MODEL FROM SN_AYN_TOOL WHERE TOOL_CD=?", String.class, cd)).isNull();
+		String pk = "W" + uniq().substring(0, 6);
+		mvc.perform(auth(put(BASE + "/workspaces/" + pk), "{\"workspacePath\":\"/ws/a\",\"promptTemplate\":\"t\"}")).andExpect(status().isOk());
+		mvc.perform(auth(put(BASE + "/workspaces/" + pk), "{\"workspacePath\":\"/ws/a\",\"promptTemplate\":null}")).andExpect(status().isOk());
+		assertThat(jdbc.queryForObject("SELECT PROMPT_TEMPLATE FROM SN_AYN_WORKSPACE WHERE PROJECT_KEY=?", String.class, pk)).isNull();
+	}
 }
