@@ -1,8 +1,9 @@
 package tsh.d94.app.server.interfaces.controller.cira;
 
-import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -15,7 +16,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import tsh.d94.app.server.apService.cira.AttachmentService;
 import tsh.d94.app.server.apService.cira.dto.AttachmentResponse;
@@ -44,15 +44,15 @@ public class AttachmentController {
 		return ApiResponse.ok(attachmentService.listAttachments(issueId));
 	}
 
+	/**
+	 * 첨부 파일 본문. 요청 스레드에서 동기로 흘려보낸다.
+	 * StreamingResponseBody(비동기)는 ASYNC 재디스패치에서 JWT 필터가 다시 돌지 않아
+	 * anyRequest().authenticated() 에 막혀 파일 대신 오류가 내려갔다.
+	 * inline + UTF-8 파일명(RFC 5987) → 브라우저가 열 수 있는 형식(이미지·PDF·텍스트)은 바로 보여 준다.
+	 */
 	@GetMapping("/attachments/{attachmentId}/download")
-	public ResponseEntity<StreamingResponseBody> download(@PathVariable String attachmentId) {
+	public ResponseEntity<InputStreamResource> download(@PathVariable String attachmentId) {
 		SnCiraAttachmentModel attachment = attachmentService.getAttachmentForDownload(attachmentId);
-
-		StreamingResponseBody body = outputStream -> {
-			try (InputStream is = attachmentService.getObjectStream(attachment.getS3Key())) {
-				is.transferTo(outputStream);
-			}
-		};
 
 		MediaType mediaType;
 		try {
@@ -63,13 +63,15 @@ public class AttachmentController {
 
 		HttpHeaders headers = new HttpHeaders();
 		headers.setContentDisposition(
-			ContentDisposition.inline().filename(attachment.getFileNm()).build()
+			ContentDisposition.inline().filename(attachment.getFileNm(), StandardCharsets.UTF_8).build()
 		);
 
-		return ResponseEntity.ok()
-			.headers(headers)
-			.contentType(mediaType)
-			.body(body);
+		InputStreamResource body = new InputStreamResource(attachmentService.getObjectStream(attachment.getS3Key()));
+		ResponseEntity.BodyBuilder res = ResponseEntity.ok().headers(headers).contentType(mediaType);
+		if (attachment.getFileSize() != null) {
+			res.contentLength(attachment.getFileSize());
+		}
+		return res.body(body);
 	}
 
 	@DeleteMapping("/attachments/{attachmentId}")
