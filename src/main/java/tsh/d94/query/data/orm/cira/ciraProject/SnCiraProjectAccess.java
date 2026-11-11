@@ -27,6 +27,11 @@ public class SnCiraProjectAccess extends AbstractCrudService<SnCiraProjectModel,
 		return repo.findByProjectKey(projectKey);
 	}
 
+	/** tenant 필터 없이 프로젝트 키 조회 (내부 API 용) */
+	public Optional<String> findProjectKeyById(String projectId) {
+		return repo.findById(projectId).map(SnCiraProjectModel::getProjectKey);
+	}
+
 	public List<SnCiraProjectModel> findAllById(List<String> ids) {
 		return repo.findAllById(ids);
 	}

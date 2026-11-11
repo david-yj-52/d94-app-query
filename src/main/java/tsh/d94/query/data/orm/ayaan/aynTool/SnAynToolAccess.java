@@ -10,4 +10,16 @@ public class SnAynToolAccess {
 	@Autowired
 	SnAynToolRepo repo;
 
+	public java.util.List<SnAynToolModel> findAll() {
+		return repo.findAll();
+	}
+
+	public java.util.Optional<SnAynToolModel> find(String id) {
+		return repo.findById(id);
+	}
+
+	public SnAynToolModel save(SnAynToolModel m) {
+		return repo.save(m);
+	}
+
 }

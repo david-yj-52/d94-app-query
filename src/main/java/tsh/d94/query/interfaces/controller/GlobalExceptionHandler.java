@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import tsh.d94.app.server.apService.auth.CredentialInvalidException;
+import tsh.d94.app.server.apService.ayaan.AyaanConflictException;
 import tsh.d94.app.server.apService.cira.cql.CqlParseException;
 import tsh.d94.app.server.apService.cira.exception.CiraException;
 import tsh.d94.app.server.apService.study.exception.StudyException;
@@ -56,6 +57,13 @@ public class GlobalExceptionHandler {
 		log.warn("Encrypted credential rejected: {}", e.getMessage());
 		return ResponseEntity.badRequest()
 			.body(ApiResponse.error("AUTH_CREDENTIAL_INVALID", "로그인 정보를 처리할 수 없습니다. 다시 시도해주세요."));
+	}
+
+	@ExceptionHandler(AyaanConflictException.class)
+	public ResponseEntity<ApiResponse<Object>> handleAyaanConflict(AyaanConflictException e) {
+		log.warn("Ayaan conflict: {}", e.getMessage());
+		return ResponseEntity.status(HttpStatus.CONFLICT)
+			.body(ApiResponse.<Object>builder().success(false).code("CONFLICT").message(e.getMessage()).data(e.getData()).build());
 	}
 
 	@ExceptionHandler(EntityNotFoundException.class)

@@ -10,4 +10,20 @@ public class SnAynWorkspaceAccess {
 	@Autowired
 	SnAynWorkspaceRepo repo;
 
+	public java.util.List<SnAynWorkspaceModel> findAll() {
+		return repo.findAll();
+	}
+
+	public java.util.Optional<SnAynWorkspaceModel> find(String id) {
+		return repo.findById(id);
+	}
+
+	public SnAynWorkspaceModel save(SnAynWorkspaceModel m) {
+		return repo.save(m);
+	}
+
+	public void delete(String projectKey) {
+		repo.deleteById(projectKey);
+	}
+
 }

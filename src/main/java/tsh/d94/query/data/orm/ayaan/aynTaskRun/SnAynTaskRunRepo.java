@@ -6,4 +6,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface SnAynTaskRunRepo extends BaseJpaRepository<SnAynTaskRunModel, String> {
 
+	java.util.List<SnAynTaskRunModel> findByTaskIdOrderByRunSeq(String taskId);
+
 }

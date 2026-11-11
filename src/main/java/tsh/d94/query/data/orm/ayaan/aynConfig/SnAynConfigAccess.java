@@ -10,4 +10,16 @@ public class SnAynConfigAccess {
 	@Autowired
 	SnAynConfigRepo repo;
 
+	public java.util.List<SnAynConfigModel> findAll() {
+		return repo.findAll();
+	}
+
+	public java.util.Optional<SnAynConfigModel> find(String id) {
+		return repo.findById(id);
+	}
+
+	public SnAynConfigModel save(SnAynConfigModel m) {
+		return repo.save(m);
+	}
+
 }

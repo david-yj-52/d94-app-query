@@ -10,4 +10,16 @@ public class SnAynToolQuotaAccess {
 	@Autowired
 	SnAynToolQuotaRepo repo;
 
+	public java.util.List<SnAynToolQuotaModel> findAll() {
+		return repo.findAll();
+	}
+
+	public java.util.Optional<SnAynToolQuotaModel> find(String toolCd, String windowCd) {
+		return repo.findById(new SnAynToolQuotaModel.Key(toolCd, windowCd));
+	}
+
+	public SnAynToolQuotaModel save(SnAynToolQuotaModel m) {
+		return repo.save(m);
+	}
+
 }
