@@ -3,6 +3,7 @@ package tsh.d94.app.server.apService.cira;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.SequenceInputStream;
+import java.text.Normalizer;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Enumeration;
@@ -264,7 +265,9 @@ public class AttachmentService {
 		if (originalName == null || originalName.isBlank()) {
 			return "attachment_" + System.currentTimeMillis();
 		}
-		return originalName.replaceAll("[^a-zA-Z0-9._\\-가-힣ㄱ-ㅎㅏ-ㅣ]", "_");
+		// macOS 는 한글 파일명을 자모 분리형(NFD)으로 보낸다 → 완성형(NFC)으로 합친 뒤 걸러야 '_' 로 바뀌지 않는다
+		return Normalizer.normalize(originalName, Normalizer.Form.NFC)
+			.replaceAll("[^a-zA-Z0-9._\\-가-힣ㄱ-ㅎㅏ-ㅣ]", "_");
 	}
 
 	private void recordLog(String issueId, String field, String oldVal, String newVal, String changerId) {

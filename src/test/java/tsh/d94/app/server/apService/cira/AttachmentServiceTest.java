@@ -116,7 +116,9 @@ class AttachmentServiceTest {
 		willAnswer(inv -> stored[0] = ((InputStream)inv.getArgument(1)).readAllBytes())
 			.given(storage).putStream(anyString(), any(), eq(PART + 2L), eq("image/png"));
 
-		var res = service.completeUpload("i-1", "up", "그림 1.png", PART + 2L, "image/png");
+		// 파일명은 macOS 처럼 자모 분리형(NFD)으로 보낸다
+		var res = service.completeUpload("i-1", "up",
+			java.text.Normalizer.normalize("그림 1.png", java.text.Normalizer.Form.NFD), PART + 2L, "image/png");
 
 		assertThat(stored[0]).hasSize(PART + 2);
 		assertThat(stored[0][PART]).isEqualTo((byte)7);
