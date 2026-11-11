@@ -191,6 +191,48 @@ class AyaanInternalIT {
 	}
 
 	@Test
+	void concurrentClaimSameWorkspaceDifferentToolsOnlyOne() throws Exception {
+		String ws = "/ws/" + uniq();
+		String toolA = uniq();
+		String toolB = uniq();
+		insertTask(toolA, ws, "QUEUED", null, null);
+		insertTask(toolB, ws, "QUEUED", null, null);
+		List<Integer> codes = parallel(() -> claim(toolA, 0), () -> claim(toolB, 0));
+		assertThat(codes).containsExactlyInAnyOrder(200, 204);
+		assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM SN_AYN_TASK WHERE WORKSPACE_PATH=? AND STATUS='RUNNING'", Integer.class, ws)).isEqualTo(1);
+	}
+
+	@Test
+	void transitionToRunningInBusyWorkspaceIs409() throws Exception {
+		String ws = "/ws/" + uniq();
+		insertTask(uniq(), ws, "RUNNING", null, null);
+		String id = insertTask(uniq(), ws, "QUEUED", null, null);
+		mvc.perform(auth(post(BASE + "/tasks/" + id + "/transition"),
+			"{\"expectedStatus\":\"QUEUED\",\"nextStatus\":\"RUNNING\",\"fields\":{}}")).andExpect(status().isConflict());
+		assertThat(dbStatus(id)).isEqualTo("QUEUED");
+	}
+
+	@Test
+	void transitionUnknownTaskIs404() throws Exception {
+		mvc.perform(auth(post(BASE + "/tasks/" + UUID.randomUUID() + "/transition"),
+			"{\"expectedStatus\":\"QUEUED\",\"nextStatus\":\"DONE\",\"fields\":{}}")).andExpect(status().isNotFound());
+	}
+
+	@Test
+	void transitionInputValidationIs400() throws Exception {
+		String id = insertTask(uniq(), "/ws/" + uniq(), "QUEUED", null, null);
+		String t = BASE + "/tasks/" + id + "/transition";
+		mvc.perform(auth(post(t), "{\"nextStatus\":\"DONE\"}")).andExpect(status().isBadRequest());
+		mvc.perform(auth(post(t), "{\"expectedStatus\":\"QUEUED\"}")).andExpect(status().isBadRequest());
+		mvc.perform(auth(post(t), "{\"expectedStatus\":\"QUEUED\",\"nextStatus\":\"DONE\",\"fields\":{\"bogus\":1}}")).andExpect(status().isBadRequest());
+		mvc.perform(auth(post(t), "{\"expectedStatus\":\"QUEUED\",\"nextStatus\":\"DONE\",\"fields\":{\"resultSummary\":{\"a\":1}}}")).andExpect(status().isBadRequest());
+		assertThat(dbStatus(id)).isEqualTo("QUEUED");
+		// 숫자는 문자열로 안전 변환, null 은 그대로 반영
+		mvc.perform(auth(post(t), "{\"expectedStatus\":\"QUEUED\",\"nextStatus\":\"DONE\",\"fields\":{\"resultSummary\":42,\"failReason\":null}}"))
+			.andExpect(status().isOk()).andExpect(jsonPath("$.data.resultSummary").value("42"));
+	}
+
+	@Test
 	void leaseExtendAndOwnerMismatch() throws Exception {
 		String id = insertTask(uniq(), "/ws/" + uniq(), "RUNNING", null, "LEASE_OWNER='w1', LEASE_UNTIL = now() + interval '5 seconds'");
 		mvc.perform(auth(post(BASE + "/tasks/" + id + "/lease"), "{\"leaseOwner\":\"w2\",\"leaseSeconds\":60}")).andExpect(status().isConflict());

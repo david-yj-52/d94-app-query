@@ -9,7 +9,9 @@ import java.util.UUID;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -51,6 +53,7 @@ public class AyaanService {
 	private final SnCiraIssueAccess issueAccess;
 	private final SnCiraProjectAccess projectAccess;
 	private final ObjectMapper om;
+	private final PlatformTransactionManager txManager;
 
 	// ── config / tool / workspace / quota ──────────────────────────────────
 
@@ -177,36 +180,66 @@ public class AyaanService {
 		return TaskDto.from(t, runs, totals(runs));
 	}
 
-	@Transactional
+	/**
+	 * 조건부 전이. 같은 작업공간에 이미 RUNNING 이 있어 부분 유니크 인덱스(ux_ayn_task_running_ws)에 걸리면 409.
+	 * 위반 예외를 잡아야 해서 @Transactional 대신 TransactionTemplate 으로 트랜잭션 경계를 직접 둔다.
+	 */
 	public TaskDto transition(String id, TransitionReq req) {
+		if (req.expectedStatus() == null || req.nextStatus() == null) {
+			throw new IllegalArgumentException("expectedStatus and nextStatus are required");
+		}
+		try {
+			return new TransactionTemplate(txManager).execute(tx -> doTransition(id, req));
+		} catch (DataIntegrityViolationException e) {
+			throw new AyaanConflictException("transition to " + req.nextStatus() + " violates a uniqueness rule (workspace busy or active issue task)", null);
+		}
+	}
+
+	private TaskDto doTransition(String id, TransitionReq req) {
+		findTask(id); // 없으면 404 (조건 불일치 409 와 구분)
 		if (taskAccess.transition(id, req.expectedStatus(), req.nextStatus()) == 0) {
 			throw new AyaanConflictException("task " + id + " is not in status " + req.expectedStatus(), null);
 		}
 		SnAynTaskModel t = findTask(id);
 		(req.fields() == null ? Map.<String, Object>of() : req.fields()).forEach((k, v) -> {
 			switch (k) {
-				case "resumeAt" -> t.setResumeAt(om.convertValue(v, LocalDateTime.class));
-				case "pauseReason" -> t.setPauseReason((String)v);
-				case "resumeCount" -> t.setResumeCount(om.convertValue(v, Integer.class));
-				case "cliSessionId" -> t.setCliSessionId((String)v);
-				case "toolCd" -> t.setToolCd((String)v);
-				case "resultSummary" -> t.setResultSummary((String)v);
-				case "failReason" -> t.setFailReason((String)v);
-				case "leaseOwner" -> t.setLeaseOwner((String)v);
-				case "leaseUntil" -> t.setLeaseUntil(om.convertValue(v, LocalDateTime.class));
-				case "startedAt" -> t.setStartedAt(om.convertValue(v, LocalDateTime.class));
-				case "finishedAt" -> t.setFinishedAt(om.convertValue(v, LocalDateTime.class));
+				case "resumeAt" -> t.setResumeAt(as(v, LocalDateTime.class));
+				case "pauseReason" -> t.setPauseReason(as(v, String.class));
+				case "resumeCount" -> t.setResumeCount(as(v, Integer.class));
+				case "cliSessionId" -> t.setCliSessionId(as(v, String.class));
+				case "toolCd" -> t.setToolCd(as(v, String.class));
+				case "resultSummary" -> t.setResultSummary(as(v, String.class));
+				case "failReason" -> t.setFailReason(as(v, String.class));
+				case "leaseOwner" -> t.setLeaseOwner(as(v, String.class));
+				case "leaseUntil" -> t.setLeaseUntil(as(v, LocalDateTime.class));
+				case "startedAt" -> t.setStartedAt(as(v, LocalDateTime.class));
+				case "finishedAt" -> t.setFinishedAt(as(v, LocalDateTime.class));
 				default -> throw new IllegalArgumentException("unknown field: " + k);
 			}
 		});
 		return TaskDto.from(taskAccess.saveTask(t));
 	}
 
-	/** 선점 성공 시 RUNNING Task, 대상이 없으면 null */
-	@Transactional
+	/** 변환 불가 값(객체를 문자열로 등)은 400 */
+	private <T> T as(Object v, Class<T> type) {
+		try {
+			return om.convertValue(v, type);
+		} catch (IllegalArgumentException e) {
+			throw new IllegalArgumentException("invalid value for " + type.getSimpleName() + ": " + v);
+		}
+	}
+
+	/** 선점 성공 시 RUNNING Task, 대상이 없거나 같은 작업공간 선점 경쟁에서 지면(unique 위반) null */
 	public TaskDto claim(ClaimReq req) {
-		List<String> ids = taskAccess.claim(req.leaseOwner(), req.leaseSeconds(), req.toolCd(), req.graceSeconds());
-		return ids.isEmpty() ? null : TaskDto.from(findTask(ids.get(0)));
+		try {
+			String id = new TransactionTemplate(txManager).execute(tx -> {
+				List<String> ids = taskAccess.claim(req.leaseOwner(), req.leaseSeconds(), req.toolCd(), req.graceSeconds());
+				return ids.isEmpty() ? null : ids.get(0);
+			});
+			return id == null ? null : TaskDto.from(findTask(id));
+		} catch (DataIntegrityViolationException e) {
+			return null;
+		}
 	}
 
 	@Transactional
