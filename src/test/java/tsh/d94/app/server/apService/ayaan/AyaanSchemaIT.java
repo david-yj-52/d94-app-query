@@ -21,7 +21,7 @@ class AyaanSchemaIT {
 	void seedConfigHasSpecDefaults() {
 		assertThat(jdbc.queryForObject("SELECT CONFIG_VALUE FROM SN_AYN_CONFIG WHERE CONFIG_KEY='EXHAUST_POLICY'", String.class))
 			.isEqualTo("WAIT_SAME_TOOL");
-		assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM SN_AYN_CONFIG", Integer.class)).isEqualTo(11);
+		assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM SN_AYN_CONFIG", Integer.class)).isEqualTo(12);
 	}
 
 	@Test
