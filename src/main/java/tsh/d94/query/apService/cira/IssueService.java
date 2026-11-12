@@ -107,7 +107,7 @@ public class IssueService {
 			.content(request.getContent())
 			.issueTypeId(issueTypeId)
 			.statusId(statusId)
-			.priority(request.getPriority())
+			.priority(request.getPriority() != null ? request.getPriority() : "MEDIUM") // DB NOT NULL, 웹은 선택 항목
 			.storyPnt(request.getStoryPnt())
 			.assigneeId(request.getAssigneeId())
 			.reporterId(reporter.getObjId())

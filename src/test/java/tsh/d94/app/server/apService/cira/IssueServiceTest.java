@@ -222,6 +222,16 @@ class IssueServiceTest {
 			assertThat(saved.getValue().getAssigneeId()).isEqualTo(OTHER);
 		}
 
+		@Test
+		@DisplayName("우선순위를 비우면 MEDIUM 으로 저장된다")
+		void nullPriority_defaultsToMedium() {
+			issueService.createIssue(PROJECT_ID, request());
+
+			ArgumentCaptor<SnCiraIssueModel> saved = ArgumentCaptor.forClass(SnCiraIssueModel.class);
+			then(issueAccess).should().save(saved.capture());
+			assertThat(saved.getValue().getPriority()).isEqualTo("MEDIUM");
+		}
+
 		private CreateIssueRequest request() {
 			CreateIssueRequest req = new CreateIssueRequest();
 			req.setTitle("새 이슈");
