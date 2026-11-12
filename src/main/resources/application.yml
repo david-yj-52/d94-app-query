@@ -101,6 +101,9 @@ application:
         expiration: 604800000 # 7 days
     cors:
       allowed-origins: ${NEXT_PUBLIC_URL:*}
+    # refreshToken 쿠키 Secure 플래그. HTTPS 가 아닌 로컬에서만 false
+    cookie:
+      secure: ${COOKIE_SECURE:true}
     # 로그인·회원가입 자격 증명 암호화 (CredentialCryptoService). 비어 있으면 기동 시 임시 키 생성
     credential:
       private-key: ${AUTH_CREDENTIAL_PRIVATE_KEY:}
