@@ -13,6 +13,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.persistence.EntityNotFoundException;
@@ -21,6 +23,12 @@ import tsh.d94.app.server.apService.ayaan.dto.AyaanDtos.*;
 import tsh.d94.app.server.data.orm.ayaan.AynRefBase;
 import tsh.d94.app.server.data.orm.ayaan.aynConfig.SnAynConfigAccess;
 import tsh.d94.app.server.data.orm.ayaan.aynConfig.SnAynConfigModel;
+import tsh.d94.app.server.data.orm.ayaan.aynPermission.SnAynPermissionAccess;
+import tsh.d94.app.server.data.orm.ayaan.aynPermission.SnAynPermissionModel;
+import tsh.d94.app.server.data.orm.ayaan.aynRequest.SnAynRequestAccess;
+import tsh.d94.app.server.data.orm.ayaan.aynRequest.SnAynRequestModel;
+import tsh.d94.app.server.data.orm.ayaan.aynSkill.SnAynSkillAccess;
+import tsh.d94.app.server.data.orm.ayaan.aynSkill.SnAynSkillModel;
 import tsh.d94.app.server.data.orm.ayaan.aynTask.SnAynTaskAccess;
 import tsh.d94.app.server.data.orm.ayaan.aynTask.SnAynTaskModel;
 import tsh.d94.app.server.data.orm.ayaan.aynTaskRun.SnAynTaskRunAccess;
@@ -50,6 +58,9 @@ public class AyaanService {
 	private final SnAynToolQuotaAccess quotaAccess;
 	private final SnAynTaskAccess taskAccess;
 	private final SnAynTaskRunAccess runAccess;
+	private final SnAynSkillAccess skillAccess;
+	private final SnAynPermissionAccess permissionAccess;
+	private final SnAynRequestAccess requestAccess;
 	private final SnCiraIssueAccess issueAccess;
 	private final SnCiraProjectAccess projectAccess;
 	private final ObjectMapper om;
@@ -96,7 +107,128 @@ public class AyaanService {
 		t.setFallbackResetRule(d.fallbackResetRule());
 		t.setBudgetTokens(d.budgetTokens());
 		t.setBudgetPeriod(d.budgetPeriod());
+		t.setPlanSkillCd(d.planSkillCd());
+		t.setDevSkillCd(d.devSkillCd());
 		return toDto(toolAccess.save(t));
+	}
+
+	// ── skill / permission ─────────────────────────────────────────────────
+
+	public List<SkillDto> getSkills() {
+		return skillAccess.findAll().stream().map(AyaanService::toDto).toList();
+	}
+
+	/** PUT 은 전체 교체(nullable 은 null 이면 지움). 값 검증은 ayaan 이 한다 */
+	@Transactional
+	public SkillDto putSkill(String skillCd, SkillDto d) {
+		if (d.skillNm() == null || d.toolCd() == null || d.phase() == null || d.invokeText() == null) {
+			throw new IllegalArgumentException("skillNm, toolCd, phase, invokeText are required");
+		}
+		SnAynSkillModel s = skillAccess.find(skillCd).orElseGet(() -> stamp(SnAynSkillModel.builder().skillCd(skillCd).build()));
+		s.setSkillNm(d.skillNm());
+		s.setToolCd(d.toolCd());
+		s.setPhase(d.phase());
+		s.setInvokeText(d.invokeText());
+		s.setPluginRef(d.pluginRef());
+		s.setDescription(d.description());
+		s.setEnabled(d.enabled() == null || d.enabled());
+		s.setSortNo(d.sortNo() == null ? 0 : d.sortNo());
+		return toDto(skillAccess.save(s));
+	}
+
+	/** Tool 기본 skill 이 이 skill 을 가리키면 함께 비운다 */
+	@Transactional
+	public void deleteSkill(String skillCd) {
+		skillAccess.find(skillCd).orElseThrow(() -> new EntityNotFoundException("skill not found: " + skillCd));
+		toolAccess.findAll().forEach(t -> {
+			if (skillCd.equals(t.getPlanSkillCd())) t.setPlanSkillCd(null);
+			if (skillCd.equals(t.getDevSkillCd())) t.setDevSkillCd(null);
+		});
+		skillAccess.delete(skillCd);
+	}
+
+	public List<PermissionDto> getPermissions() {
+		return permissionAccess.listAll().stream().map(AyaanService::toDto).toList();
+	}
+
+	@Transactional
+	public List<PermissionDto> putPermissions(List<PermissionDto> rows) {
+		List<SnAynPermissionModel> models = rows.stream().map(d -> {
+			if (d.toolCd() == null || d.category() == null || d.matcher() == null || d.decision() == null) {
+				throw new IllegalArgumentException("toolCd, category, matcher, decision are required");
+			}
+			SnAynPermissionModel m = stamp(SnAynPermissionModel.builder().build());
+			m.setToolCd(d.toolCd());
+			m.setCategory(d.category());
+			m.setMatcher(d.matcher());
+			m.setDecision(d.decision());
+			m.setPriority(d.priority() == null ? 0 : d.priority());
+			m.setDescription(d.description());
+			return m;
+		}).toList();
+		permissionAccess.replaceAll(models);
+		return getPermissions();
+	}
+
+	// ── request (사람 응답 대기) ────────────────────────────────────────────
+
+	/** 작업당 OPEN 1건은 DB 부분 유니크 인덱스가 보장한다. 위반 시 기존 OPEN 요청을 409 로 돌려준다. */
+	public RequestDto createRequest(String taskId, RequestDto d) {
+		findTask(taskId);
+		if (d.kind() == null) throw new IllegalArgumentException("kind is required");
+		SnAynRequestModel r = stamp(SnAynRequestModel.builder().build());
+		r.setTaskId(taskId);
+		r.setRunId(d.runId());
+		r.setKind(d.kind());
+		r.setStatus("OPEN");
+		r.setQuestion(d.question());
+		r.setOptions(json(d.options() == null ? List.of() : d.options()));
+		r.setRecommend(d.recommend());
+		r.setContext(d.context());
+		r.setToolName(d.toolName());
+		r.setInputHash(d.inputHash());
+		try {
+			return toDto(requestAccess.insert(r));
+		} catch (DataIntegrityViolationException e) {
+			List<SnAynRequestModel> open = requestAccess.search("OPEN", taskId);
+			if (open.isEmpty()) throw e;
+			throw new AyaanConflictException("open request already exists for task " + taskId, toDto(open.get(0)));
+		}
+	}
+
+	public List<RequestDto> listRequests(String status, String taskId) {
+		return requestAccess.search(status, taskId).stream().map(this::toDto).toList();
+	}
+
+	public RequestDto getRequest(String id) {
+		return toDto(findRequest(id));
+	}
+
+	@Transactional
+	public RequestDto answerRequest(String id, AnswerReq req) {
+		findRequest(id);
+		if (requestAccess.answer(id, req.answer(), req.decision(), req.answeredBy()) == 0) {
+			throw new AyaanConflictException("request " + id + " is not OPEN", toDto(findRequest(id)));
+		}
+		return toDto(findRequest(id));
+	}
+
+	@Transactional
+	public RequestDto consumeRequest(String id) {
+		findRequest(id);
+		if (requestAccess.consume(id) == 0) {
+			throw new AyaanConflictException("request " + id + " is not ANSWERED", null);
+		}
+		return toDto(findRequest(id));
+	}
+
+	@Transactional
+	public RequestDto cancelRequest(String id) {
+		findRequest(id);
+		if (requestAccess.cancel(id) == 0) {
+			throw new AyaanConflictException("request " + id + " is not OPEN", null);
+		}
+		return toDto(findRequest(id));
 	}
 
 	public List<WorkspaceDto> getWorkspaces() {
@@ -162,6 +294,9 @@ public class AyaanService {
 		t.setResumeAt(d.resumeAt());
 		t.setPauseReason(d.pauseReason());
 		t.setResumeCount(d.resumeCount() != null ? d.resumeCount() : 0);
+		t.setPhase(d.phase() != null ? d.phase() : "DEV");
+		t.setSkillCd(d.skillCd());
+		t.setParentTaskId(d.parentTaskId());
 		try {
 			return TaskDto.from(taskAccess.insert(t));
 		} catch (DataIntegrityViolationException e) {
@@ -179,7 +314,7 @@ public class AyaanService {
 	public TaskDto getTask(String id) {
 		SnAynTaskModel t = findTask(id);
 		List<RunDto> runs = runAccess.findByTaskId(id).stream().map(RunDto::from).toList();
-		return TaskDto.from(t, runs, totals(runs));
+		return TaskDto.from(t, runs, totals(runs), listRequests(null, id));
 	}
 
 	/**
@@ -216,6 +351,7 @@ public class AyaanService {
 				case "leaseUntil" -> t.setLeaseUntil(as(v, LocalDateTime.class));
 				case "startedAt" -> t.setStartedAt(as(v, LocalDateTime.class));
 				case "finishedAt" -> t.setFinishedAt(as(v, LocalDateTime.class));
+				case "planDocPath" -> t.setPlanDocPath(as(v, String.class));
 				default -> throw new IllegalArgumentException("unknown field: " + k);
 			}
 		});
@@ -300,6 +436,43 @@ public class AyaanService {
 		return taskAccess.get(id).orElseThrow(() -> new EntityNotFoundException("task not found: " + id));
 	}
 
+	private SnAynRequestModel findRequest(String id) {
+		return requestAccess.get(id).orElseThrow(() -> new EntityNotFoundException("request not found: " + id));
+	}
+
+	private String json(List<String> v) {
+		try {
+			return om.writeValueAsString(v);
+		} catch (JsonProcessingException e) {
+			throw new IllegalArgumentException("invalid options");
+		}
+	}
+
+	private List<String> options(String raw) {
+		if (raw == null || raw.isBlank()) return List.of();
+		try {
+			return om.readValue(raw, new TypeReference<List<String>>() { });
+		} catch (JsonProcessingException e) {
+			return List.of();
+		}
+	}
+
+	private RequestDto toDto(SnAynRequestModel r) {
+		return new RequestDto(r.getObjId(), r.getTaskId(), r.getRunId(), r.getKind(), r.getStatus(), r.getQuestion(),
+			options(r.getOptions()), r.getRecommend(), r.getContext(), r.getToolName(), r.getInputHash(), r.getAnswer(),
+			r.getDecision(), r.getAnsweredBy(), r.getAnsweredAt(), r.getConsumedAt(), r.getCreatedAt());
+	}
+
+	private static SkillDto toDto(SnAynSkillModel s) {
+		return new SkillDto(s.getSkillCd(), s.getSkillNm(), s.getToolCd(), s.getPhase(), s.getInvokeText(), s.getPluginRef(),
+			s.getDescription(), s.getEnabled(), s.getSortNo());
+	}
+
+	private static PermissionDto toDto(SnAynPermissionModel p) {
+		return new PermissionDto(p.getObjId(), p.getToolCd(), p.getCategory(), p.getMatcher(), p.getDecision(), p.getPriority(),
+			p.getDescription());
+	}
+
 	private static TokenTotals totals(List<RunDto> runs) {
 		long in = 0, out = 0, cr = 0, cw = 0;
 		BigDecimal cost = BigDecimal.ZERO;
@@ -340,7 +513,8 @@ public class AyaanService {
 
 	private static ToolDto toDto(SnAynToolModel t) {
 		return new ToolDto(t.getToolCd(), t.getEnabled(), t.getAuthMode(), t.getPlanName(), t.getApiKeyRef(), t.getModel(),
-			t.getMaxConcurrency(), t.getFallbackResetRule(), t.getBudgetTokens(), t.getBudgetPeriod());
+			t.getMaxConcurrency(), t.getFallbackResetRule(), t.getBudgetTokens(), t.getBudgetPeriod(), t.getPlanSkillCd(),
+			t.getDevSkillCd());
 	}
 
 	private static WorkspaceDto toDto(SnAynWorkspaceModel w) {

@@ -64,4 +64,7 @@ public class ApTableName {
 	public static final String SN_AYN_TOOL_QUOTA = "SN_AYN_TOOL_QUOTA";
 	public static final String SN_AYN_TASK = "SN_AYN_TASK";
 	public static final String SN_AYN_TASK_RUN = "SN_AYN_TASK_RUN";
+	public static final String SN_AYN_SKILL = "SN_AYN_SKILL";
+	public static final String SN_AYN_PERMISSION = "SN_AYN_PERMISSION";
+	public static final String SN_AYN_REQUEST = "SN_AYN_REQUEST";
 }

@@ -50,4 +50,10 @@ public class SnAynToolModel extends AynRefBase {
 	@Column(name = "BUDGET_PERIOD", length = 10)
 	private String budgetPeriod;
 
+	@Column(name = "PLAN_SKILL_CD", length = 50)
+	private String planSkillCd;
+
+	@Column(name = "DEV_SKILL_CD", length = 50)
+	private String devSkillCd;
+
 }

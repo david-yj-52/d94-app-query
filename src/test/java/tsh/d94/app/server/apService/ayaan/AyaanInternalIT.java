@@ -268,4 +268,90 @@ class AyaanInternalIT {
 		mvc.perform(auth(put(BASE + "/workspaces/" + pk), "{\"workspacePath\":\"/ws/a\",\"promptTemplate\":null}")).andExpect(status().isOk());
 		assertThat(jdbc.queryForObject("SELECT PROMPT_TEMPLATE FROM SN_AYN_WORKSPACE WHERE PROJECT_KEY=?", String.class, pk)).isNull();
 	}
+
+	@Test
+	void claimNeverPicksWaiting() throws Exception {
+		String tool = uniq();
+		insertTask(tool, "/ws/" + uniq(), "WAITING", null, "RESUME_AT = now() - interval '1 hour'");
+		assertThat(claim(tool, 0)).isEqualTo(204);
+	}
+
+	@Test
+	void createTaskWithPhaseAndTransitionPlanDocPath() throws Exception {
+		String parent = insertTask(uniq(), "/ws/" + uniq(), "RUNNING", null, null);
+		String body = "{\"source\":\"API\",\"projectKey\":\"AY\",\"workspacePath\":\"/ws/p\",\"prompt\":\"p\",\"toolCd\":\"CLAUDE\","
+			+ "\"status\":\"WAITING\",\"phase\":\"DEV\",\"skillCd\":\"PONYTAIL\",\"parentTaskId\":\"" + parent + "\"}";
+		mvc.perform(auth(post(BASE + "/tasks"), body)).andExpect(status().isCreated())
+			.andExpect(jsonPath("$.data.status").value("WAITING")).andExpect(jsonPath("$.data.phase").value("DEV"))
+			.andExpect(jsonPath("$.data.skillCd").value("PONYTAIL")).andExpect(jsonPath("$.data.parentTaskId").value(parent));
+		mvc.perform(auth(post(BASE + "/tasks/" + parent + "/transition"),
+			"{\"expectedStatus\":\"RUNNING\",\"nextStatus\":\"DONE\",\"fields\":{\"planDocPath\":\"docs/x.md\"}}"))
+			.andExpect(status().isOk()).andExpect(jsonPath("$.data.planDocPath").value("docs/x.md"));
+		// 기존 경로(phase 없음)는 DEV
+		mvc.perform(auth(post(BASE + "/tasks"), "{\"source\":\"API\",\"projectKey\":\"AY\",\"workspacePath\":\"/ws/p\",\"prompt\":\"p\",\"toolCd\":\"CLAUDE\"}"))
+			.andExpect(status().isCreated()).andExpect(jsonPath("$.data.phase").value("DEV"));
+	}
+
+	@Test
+	void skillCrudClearsToolDefaultsOnDelete() throws Exception {
+		String cd = "S" + uniq();
+		mvc.perform(auth(put(BASE + "/skills/" + cd), "{\"skillNm\":\"n\",\"toolCd\":\"CLAUDE\",\"phase\":\"PLAN\",\"invokeText\":\"/x\"}"))
+			.andExpect(status().isOk()).andExpect(jsonPath("$.data.enabled").value(true)).andExpect(jsonPath("$.data.sortNo").value(0));
+		mvc.perform(auth(put(BASE + "/skills/" + cd), "{\"skillNm\":\"n\"}")).andExpect(status().isBadRequest());
+		String tool = "T" + uniq().substring(0, 8);
+		mvc.perform(auth(put(BASE + "/tools/" + tool), "{\"planSkillCd\":\"" + cd + "\",\"devSkillCd\":\"PONYTAIL\"}"))
+			.andExpect(status().isOk()).andExpect(jsonPath("$.data.planSkillCd").value(cd));
+		mvc.perform(auth(get(BASE + "/skills"), null)).andExpect(jsonPath("$.data[?(@.skillCd=='" + cd + "')]").exists());
+		mvc.perform(auth(delete(BASE + "/skills/" + cd), null)).andExpect(status().isOk());
+		assertThat(jdbc.queryForMap("SELECT PLAN_SKILL_CD, DEV_SKILL_CD FROM SN_AYN_TOOL WHERE TOOL_CD=?", tool))
+			.containsEntry("plan_skill_cd", null).containsEntry("dev_skill_cd", "PONYTAIL");
+		mvc.perform(auth(delete(BASE + "/skills/" + cd), null)).andExpect(status().isNotFound());
+	}
+
+	@Test
+	void permissionsPutReplacesAll() throws Exception {
+		String before = mvc.perform(auth(get(BASE + "/permissions"), null)).andReturn().getResponse().getContentAsString();
+		try {
+			mvc.perform(auth(put(BASE + "/permissions"),
+				"[{\"toolCd\":\"*\",\"category\":\"GIT_PUSH\",\"matcher\":\"*\",\"decision\":\"DENY\",\"priority\":5}]"))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(1))
+				.andExpect(jsonPath("$.data[0].decision").value("DENY")).andExpect(jsonPath("$.data[0].id").isNotEmpty());
+			mvc.perform(auth(put(BASE + "/permissions"), "[{\"toolCd\":\"*\"}]")).andExpect(status().isBadRequest());
+			assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM SN_AYN_PERMISSION", Integer.class)).isEqualTo(1);
+		} finally {
+			mvc.perform(auth(put(BASE + "/permissions"), om.readTree(before).get("data").toString())).andExpect(status().isOk());
+		}
+	}
+
+	@Test
+	void requestLifecycleIsCas() throws Exception {
+		String task = insertTask(uniq(), "/ws/" + uniq(), "RUNNING", null, null);
+		String body = "{\"kind\":\"QUESTION\",\"runId\":\"r1\",\"question\":\"A or B?\",\"options\":[\"A\",\"B\"],\"recommend\":0}";
+		String res = mvc.perform(auth(post(BASE + "/tasks/" + task + "/requests"), body)).andExpect(status().isCreated())
+			.andExpect(jsonPath("$.data.status").value("OPEN")).andExpect(jsonPath("$.data.options[1]").value("B"))
+			.andReturn().getResponse().getContentAsString();
+		String id = om.readTree(res).at("/data/id").asText();
+		// 작업당 OPEN 1건 → 409 + 기존 요청
+		mvc.perform(auth(post(BASE + "/tasks/" + task + "/requests"), body)).andExpect(status().isConflict())
+			.andExpect(jsonPath("$.data.id").value(id));
+		mvc.perform(auth(post(BASE + "/requests/" + id + "/consume"), null)).andExpect(status().isConflict());
+		// 같은 요청에 두 번 답하면 두 번째는 409
+		Callable<Integer> ans = () -> mvc.perform(auth(post(BASE + "/requests/" + id + "/answer"),
+			"{\"answer\":\"A\",\"answeredBy\":\"tg:1\"}")).andReturn().getResponse().getStatus();
+		assertThat(parallel(ans, ans)).containsExactlyInAnyOrder(200, 409);
+		mvc.perform(auth(get(BASE + "/requests/" + id), null)).andExpect(jsonPath("$.data.status").value("ANSWERED"))
+			.andExpect(jsonPath("$.data.answeredBy").value("tg:1")).andExpect(jsonPath("$.data.answeredAt").isNotEmpty());
+		mvc.perform(auth(post(BASE + "/requests/" + id + "/consume"), null)).andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.status").value("CONSUMED"));
+		mvc.perform(auth(post(BASE + "/requests/" + id + "/consume"), null)).andExpect(status().isConflict());
+		// 이전 요청이 닫혔으니 새 요청 가능, 취소는 OPEN 만
+		String res2 = mvc.perform(auth(post(BASE + "/tasks/" + task + "/requests"), "{\"kind\":\"PERMISSION\",\"inputHash\":\"h\"}"))
+			.andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+		String id2 = om.readTree(res2).at("/data/id").asText();
+		mvc.perform(auth(get(BASE + "/requests?status=OPEN&taskId=" + task), null)).andExpect(jsonPath("$.data.length()").value(1));
+		mvc.perform(auth(post(BASE + "/requests/" + id2 + "/cancel"), null)).andExpect(status().isOk());
+		mvc.perform(auth(post(BASE + "/requests/" + id2 + "/cancel"), null)).andExpect(status().isConflict());
+		mvc.perform(auth(get(BASE + "/tasks/" + task), null)).andExpect(jsonPath("$.data.requests.length()").value(2));
+		mvc.perform(auth(get(BASE + "/requests/nope"), null)).andExpect(status().isNotFound());
+	}
 }
