@@ -1,0 +1,137 @@
+-- =============================================================
+-- ayaan: skill 기준정보 · 권한 정책 · 사람 요청(질문/권한/개발 시작) · 기획→개발 단계
+-- 설계: d94-app-ayaan docs/specs/2026-11-12-ayaan-skills-approvals-design.md
+-- =============================================================
+
+CREATE TABLE IF NOT EXISTS SN_AYN_SKILL
+(
+    SKILL_CD VARCHAR(50) NOT NULL,
+    SKILL_NM VARCHAR(100) NOT NULL,
+    TOOL_CD VARCHAR(20) NOT NULL,
+    PHASE VARCHAR(10) NOT NULL,          -- PLAN | DEV | ANY
+    INVOKE_TEXT VARCHAR(500) NOT NULL,   -- 프롬프트 맨 앞에 붙는 문자열 (예: /superpowers:brainstorming)
+    PLUGIN_REF VARCHAR(200),             -- plugin@marketplace (Claude 전용), NULL = 내장/지시문
+    DESCRIPTION TEXT,
+    ENABLED BOOLEAN NOT NULL DEFAULT TRUE,
+    SORT_NO INTEGER NOT NULL DEFAULT 0,
+    SRV_ID VARCHAR(100),
+    TENANT VARCHAR(100),
+    TRACE_ID VARCHAR(100),
+    EVNT_NM VARCHAR(100),
+    PREV_EVNT_NM VARCHAR(100),
+    ACT_CD VARCHAR(100),
+    ACT_CM VARCHAR(255),
+    USE_STAT_CD VARCHAR(20),
+    CREATED_AT TIMESTAMP,
+    MODIFIED_AT TIMESTAMP,
+    CREATED_BY VARCHAR(100),
+    MODIFIED_BY VARCHAR(100),
+    CONSTRAINT pk_aynSkill PRIMARY KEY (SKILL_CD)
+);
+
+ALTER TABLE SN_AYN_TOOL ADD COLUMN IF NOT EXISTS PLAN_SKILL_CD VARCHAR(50);
+ALTER TABLE SN_AYN_TOOL ADD COLUMN IF NOT EXISTS DEV_SKILL_CD VARCHAR(50);
+
+-- 기존 행은 DEV(지금까지의 동작). 새 작업의 기본값 PLAN 은 ayaan 이 정한다
+ALTER TABLE SN_AYN_TASK ADD COLUMN IF NOT EXISTS PHASE VARCHAR(10) NOT NULL DEFAULT 'DEV';
+ALTER TABLE SN_AYN_TASK ADD COLUMN IF NOT EXISTS SKILL_CD VARCHAR(50);
+ALTER TABLE SN_AYN_TASK ADD COLUMN IF NOT EXISTS PARENT_TASK_ID VARCHAR(100);
+ALTER TABLE SN_AYN_TASK ADD COLUMN IF NOT EXISTS PLAN_DOC_PATH VARCHAR(500);
+
+CREATE TABLE IF NOT EXISTS SN_AYN_PERMISSION
+(
+    OBJ_ID VARCHAR(100) NOT NULL,
+    TOOL_CD VARCHAR(20) NOT NULL,        -- CLAUDE … 또는 * (전체 기본)
+    CATEGORY VARCHAR(20) NOT NULL,       -- FILE_WRITE | SHELL | GIT_PUSH | DEPLOY | NETWORK | MCP
+    MATCHER VARCHAR(300) NOT NULL,       -- 명령 접두어 / glob / 도메인 / server:tool, * = 범주 전체
+    DECISION VARCHAR(10) NOT NULL,       -- ALLOW | ASK | DENY
+    PRIORITY INTEGER NOT NULL DEFAULT 0,
+    DESCRIPTION VARCHAR(500),
+    SRV_ID VARCHAR(100),
+    TENANT VARCHAR(100),
+    TRACE_ID VARCHAR(100),
+    EVNT_NM VARCHAR(100),
+    PREV_EVNT_NM VARCHAR(100),
+    ACT_CD VARCHAR(100),
+    ACT_CM VARCHAR(255),
+    USE_STAT_CD VARCHAR(20),
+    CREATED_AT TIMESTAMP,
+    MODIFIED_AT TIMESTAMP,
+    CREATED_BY VARCHAR(100),
+    MODIFIED_BY VARCHAR(100),
+    CONSTRAINT pk_aynPermission PRIMARY KEY (OBJ_ID)
+);
+
+CREATE TABLE IF NOT EXISTS SN_AYN_REQUEST
+(
+    OBJ_ID VARCHAR(100) NOT NULL,
+    TASK_ID VARCHAR(100) NOT NULL,
+    RUN_ID VARCHAR(100),
+    KIND VARCHAR(20) NOT NULL,           -- QUESTION | PERMISSION | START
+    STATUS VARCHAR(20) NOT NULL,         -- OPEN | ANSWERED | CONSUMED | CANCELLED
+    QUESTION TEXT,
+    OPTIONS TEXT,                        -- JSON 배열
+    RECOMMEND INTEGER,
+    CONTEXT TEXT,
+    TOOL_NAME VARCHAR(100),
+    INPUT_HASH VARCHAR(64),
+    ANSWER TEXT,
+    DECISION VARCHAR(10),                -- ALLOW | DENY (PERMISSION·START)
+    ANSWERED_BY VARCHAR(100),
+    ANSWERED_AT TIMESTAMP,
+    CONSUMED_AT TIMESTAMP,
+    SRV_ID VARCHAR(100),
+    TENANT VARCHAR(100),
+    TRACE_ID VARCHAR(100),
+    EVNT_NM VARCHAR(100),
+    PREV_EVNT_NM VARCHAR(100),
+    ACT_CD VARCHAR(100),
+    ACT_CM VARCHAR(255),
+    USE_STAT_CD VARCHAR(20),
+    CREATED_AT TIMESTAMP,
+    MODIFIED_AT TIMESTAMP,
+    CREATED_BY VARCHAR(100),
+    MODIFIED_BY VARCHAR(100),
+    CONSTRAINT pk_aynRequest PRIMARY KEY (OBJ_ID),
+    CONSTRAINT fk_aynRequest_task FOREIGN KEY (TASK_ID) REFERENCES SN_AYN_TASK (OBJ_ID)
+);
+
+-- 작업당 열린 요청은 1건
+CREATE UNIQUE INDEX IF NOT EXISTS ux_ayn_req_open_task ON SN_AYN_REQUEST (TASK_ID) WHERE STATUS = 'OPEN';
+CREATE INDEX IF NOT EXISTS ix_ayn_req_task ON SN_AYN_REQUEST (TASK_ID, CREATED_AT);
+
+-- 이슈당 활성 작업 1건: 사람 응답 대기(WAITING)도 활성이다
+DROP INDEX IF EXISTS ux_ayn_task_active_issue;
+CREATE UNIQUE INDEX ux_ayn_task_active_issue ON SN_AYN_TASK (ISSUE_KEY)
+    WHERE STATUS IN ('QUEUED', 'RUNNING', 'PAUSED', 'WAITING') AND ISSUE_KEY IS NOT NULL;
+
+-- ── 시드 ──
+INSERT INTO SN_AYN_SKILL (SKILL_CD, SKILL_NM, TOOL_CD, PHASE, INVOKE_TEXT, PLUGIN_REF, DESCRIPTION, ENABLED, SORT_NO, SRV_ID, TENANT, TRACE_ID, EVNT_NM, PREV_EVNT_NM, USE_STAT_CD, CREATED_AT, MODIFIED_AT, CREATED_BY, MODIFIED_BY)
+SELECT c, n, 'CLAUDE', p, i, r, d, TRUE, s, 'app-server', 'TSH', 'SEED-V530', 'SeedAyaan', 'None', 'Usable', now(), now(), 'flyway', 'flyway'
+FROM (VALUES
+    ('BRAINSTORM', 'Brainstorming', 'PLAN', '/superpowers:brainstorming', 'superpowers@superpowers-marketplace', '요구사항을 묻고 정리해 설계서를 쓴다', 10),
+    ('PONYTAIL', 'Ponytail', 'DEV', '/ponytail:ponytail', 'ponytail@ponytail', '최소 구현 성향으로 개발한다', 20),
+    ('EXEC_PLAN', 'Executing plans', 'DEV', '/superpowers:executing-plans', 'superpowers@superpowers-marketplace', '계획서를 단계별로 실행한다', 30)
+) AS t (c, n, p, i, r, d, s)
+ON CONFLICT DO NOTHING;
+
+UPDATE SN_AYN_TOOL SET PLAN_SKILL_CD = 'BRAINSTORM', DEV_SKILL_CD = 'PONYTAIL'
+WHERE TOOL_CD = 'CLAUDE' AND PLAN_SKILL_CD IS NULL AND DEV_SKILL_CD IS NULL;
+
+INSERT INTO SN_AYN_PERMISSION (OBJ_ID, TOOL_CD, CATEGORY, MATCHER, DECISION, PRIORITY, DESCRIPTION, SRV_ID, TENANT, TRACE_ID, EVNT_NM, PREV_EVNT_NM, USE_STAT_CD, CREATED_AT, MODIFIED_AT, CREATED_BY, MODIFIED_BY)
+SELECT 'SEED-V530-' || n, '*', c, m, d, p, x, 'app-server', 'TSH', 'SEED-V530', 'SeedAyaan', 'None', 'Usable', now(), now(), 'flyway', 'flyway'
+FROM (VALUES
+    (1, 'FILE_WRITE', '*', 'ALLOW', 0, '파일 쓰기 허용'),
+    (2, 'SHELL', '*', 'ALLOW', 0, '셸 명령 허용'),
+    (3, 'NETWORK', '*', 'ALLOW', 0, '네트워크 허용'),
+    (4, 'MCP', '*', 'ALLOW', 0, 'MCP 도구 허용'),
+    (5, 'GIT_PUSH', '*', 'ASK', 0, 'git push 는 승인 필요'),
+    (6, 'DEPLOY', 'docker', 'ASK', 0, 'docker 명령은 승인 필요'),
+    (7, 'DEPLOY', 'kubectl', 'ASK', 0, 'kubectl 명령은 승인 필요'),
+    (8, 'FILE_WRITE', '**/.env*', 'DENY', 10, '.env 파일 쓰기 금지'),
+    (9, 'SHELL', 'rm -rf /', 'DENY', 10, '루트 삭제 금지')
+) AS t (n, c, m, d, p, x)
+ON CONFLICT DO NOTHING;
+
+UPDATE SN_AYN_CONFIG SET CONFIG_VALUE = CONFIG_VALUE || ',WAITING,PLAN_DONE'
+WHERE CONFIG_KEY = 'NOTIFY_EVENTS' AND CONFIG_VALUE = 'PAUSED,RESUMED,DONE,FAILED,QUOTA_EXHAUSTED,QUOTA_RESTORED';

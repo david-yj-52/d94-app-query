@@ -27,7 +27,7 @@ public class SnAynTaskAccess extends AbstractCrudService<SnAynTaskModel, String>
 	}
 
 	public java.util.List<SnAynTaskModel> activeByIssueKey(String issueKey) {
-		return repo.findByIssueKeyAndStatusIn(issueKey, java.util.List.of("QUEUED", "RUNNING", "PAUSED"));
+		return repo.findByIssueKeyAndStatusIn(issueKey, java.util.List.of("QUEUED", "RUNNING", "PAUSED", "WAITING"));
 	}
 
 	public java.util.List<SnAynTaskModel> search(String status, String tool) {

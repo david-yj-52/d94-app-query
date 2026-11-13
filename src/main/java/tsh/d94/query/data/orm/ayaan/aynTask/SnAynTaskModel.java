@@ -76,4 +76,16 @@ public class SnAynTaskModel extends BaseModel {
 	@Column(name = "FINISHED_AT")
 	private LocalDateTime finishedAt;
 
+	@Column(name = "PHASE", length = 10, nullable = false)
+	private String phase;
+
+	@Column(name = "SKILL_CD", length = 50)
+	private String skillCd;
+
+	@Column(name = "PARENT_TASK_ID", length = 100)
+	private String parentTaskId;
+
+	@Column(name = "PLAN_DOC_PATH", length = 500)
+	private String planDocPath;
+
 }

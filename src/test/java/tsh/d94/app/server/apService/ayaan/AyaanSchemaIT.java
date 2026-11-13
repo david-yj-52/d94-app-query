@@ -21,7 +21,8 @@ class AyaanSchemaIT {
 	void seedConfigHasSpecDefaults() {
 		assertThat(jdbc.queryForObject("SELECT CONFIG_VALUE FROM SN_AYN_CONFIG WHERE CONFIG_KEY='EXHAUST_POLICY'", String.class))
 			.isEqualTo("WAIT_SAME_TOOL");
-		assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM SN_AYN_CONFIG", Integer.class)).isEqualTo(12);
+		// 다른 IT 가 키를 추가하므로 시드 행만 센다
+		assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM SN_AYN_CONFIG WHERE CREATED_BY = 'flyway'", Integer.class)).isEqualTo(12);
 	}
 
 	@Test
@@ -38,6 +39,24 @@ class AyaanSchemaIT {
 		assertThatThrownBy(() -> insertTask(issue, "QUEUED")).isInstanceOf(DataIntegrityViolationException.class);
 		assertThatThrownBy(() -> insertTask(issue, "RUNNING")).isInstanceOf(DataIntegrityViolationException.class);
 		insertTask(issue, "DONE");
+	}
+
+	@Test
+	void waitingTaskCountsAsActiveForIssue() {
+		String issue = "UW-" + UUID.randomUUID();
+		insertTask(issue, "WAITING");
+		assertThatThrownBy(() -> insertTask(issue, "QUEUED")).isInstanceOf(DataIntegrityViolationException.class);
+	}
+
+	@Test
+	void seedSkillsPermissionsAndNotifyEvents() {
+		assertThat(jdbc.queryForList("SELECT SKILL_CD FROM SN_AYN_SKILL ORDER BY SORT_NO", String.class))
+			.containsExactly("BRAINSTORM", "PONYTAIL", "EXEC_PLAN");
+		// CLAUDE 기본 skill 시드는 여기서 보지 않는다: AyaanInternalIT 가 PUT /tools/CLAUDE 로 nullable 필드를 지운다
+		assertThat(jdbc.queryForObject("SELECT DECISION FROM SN_AYN_PERMISSION WHERE CATEGORY='GIT_PUSH' AND TOOL_CD='*'", String.class))
+			.isEqualTo("ASK");
+		assertThat(jdbc.queryForObject("SELECT CONFIG_VALUE FROM SN_AYN_CONFIG WHERE CONFIG_KEY='NOTIFY_EVENTS'", String.class))
+			.endsWith(",WAITING,PLAN_DONE");
 	}
 
 	private void insertTask(String issueKey, String status) {

@@ -47,6 +47,63 @@ public class AyaanInternalController {
 		return ApiResponse.ok(svc.putTool(toolCd, body));
 	}
 
+	@GetMapping("/skills")
+	public ApiResponse<List<SkillDto>> skills() {
+		return ApiResponse.ok(svc.getSkills());
+	}
+
+	@PutMapping("/skills/{skillCd}")
+	public ApiResponse<SkillDto> putSkill(@PathVariable String skillCd, @RequestBody SkillDto body) {
+		return ApiResponse.ok(svc.putSkill(skillCd, body));
+	}
+
+	@DeleteMapping("/skills/{skillCd}")
+	public ApiResponse<Void> deleteSkill(@PathVariable String skillCd) {
+		svc.deleteSkill(skillCd);
+		return ApiResponse.ok(null);
+	}
+
+	@GetMapping("/permissions")
+	public ApiResponse<List<PermissionDto>> permissions() {
+		return ApiResponse.ok(svc.getPermissions());
+	}
+
+	/** 전체 교체 */
+	@PutMapping("/permissions")
+	public ApiResponse<List<PermissionDto>> putPermissions(@RequestBody List<PermissionDto> body) {
+		return ApiResponse.ok(svc.putPermissions(body));
+	}
+
+	@PostMapping("/tasks/{id}/requests")
+	public ResponseEntity<ApiResponse<RequestDto>> createRequest(@PathVariable String id, @RequestBody RequestDto body) {
+		return ResponseEntity.status(201).body(ApiResponse.created(svc.createRequest(id, body)));
+	}
+
+	@GetMapping("/requests")
+	public ApiResponse<List<RequestDto>> requests(@RequestParam(required = false) String status, @RequestParam(required = false) String taskId) {
+		return ApiResponse.ok(svc.listRequests(status, taskId));
+	}
+
+	@GetMapping("/requests/{id}")
+	public ApiResponse<RequestDto> request(@PathVariable String id) {
+		return ApiResponse.ok(svc.getRequest(id));
+	}
+
+	@PostMapping("/requests/{id}/answer")
+	public ApiResponse<RequestDto> answer(@PathVariable String id, @RequestBody AnswerReq body) {
+		return ApiResponse.ok(svc.answerRequest(id, body));
+	}
+
+	@PostMapping("/requests/{id}/consume")
+	public ApiResponse<RequestDto> consume(@PathVariable String id) {
+		return ApiResponse.ok(svc.consumeRequest(id));
+	}
+
+	@PostMapping("/requests/{id}/cancel")
+	public ApiResponse<RequestDto> cancel(@PathVariable String id) {
+		return ApiResponse.ok(svc.cancelRequest(id));
+	}
+
 	@GetMapping("/workspaces")
 	public ApiResponse<List<WorkspaceDto>> workspaces() {
 		return ApiResponse.ok(svc.getWorkspaces());
