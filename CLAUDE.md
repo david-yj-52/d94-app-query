@@ -167,6 +167,7 @@ sequenceDiagram
 | `apService/study/StudyUploadService` | UMD 본문 1MB 제한 때문에 768KB 조각을 MinIO `study/uploads/{id}/`에 받고, complete 때 이어 붙여 `study/docs/{docId}/source.pdf` 저장 → `StudyDocumentUploadedEvent` |
 | `apService/study/StudyParseService` | 커밋 후 `@Async("studyParseExecutor")`로 `PdfParserClient` 호출 → `StudyParseResultWriter`가 섹션·블록·그림 저장, READY/FAILED. 기동 시 남은 PARSING 은 FAILED("파싱이 중단되었습니다") |
 | `apService/study/parser/PdfParserClient` | `RestClient`로 `${GATEWAY_URL}/pdf/api/v1/parse` 호출, 헤더 `X-Service-Token`, 타임아웃 120초. 422 → 파서 message, 401 → "파싱 서버 인증 실패", 그 밖 → "파싱 서버 오류" |
+| `apService/study/StudyDocumentService` | 문서·목차·그림(동기 `InputStreamResource` — 비동기면 ASYNC 재디스패치에서 JWT 필터가 안 돌아 403), 마지막 읽던 위치 `savePosition`(`PUT documents/{id}/position`, 이 문서의 페이지 섹션·`b숫자` 블록만, V530 `LAST_SECTION_ID`·`LAST_BLOCK_KEY`) |
 | `apService/study/StudyPageService` | 페이지 응답(블록·표 셀·개요·단어 위치·마킹)을 한 번에 구성. 단어 매칭은 `TermMatcher` |
 | `apService/study/StudyAnnotationService`, `AnnotationRange` | 마킹 범위 검증(UTF-16 오프셋, 같은 페이지 섹션)·quote, 노트 목록 |
 

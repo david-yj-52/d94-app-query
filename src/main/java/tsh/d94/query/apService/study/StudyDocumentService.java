@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
 import tsh.d94.app.server.apService.study.dto.StudyDtos.DocumentResponse;
+import tsh.d94.app.server.apService.study.dto.StudyDtos.PositionRequest;
 import tsh.d94.app.server.apService.study.dto.StudyDtos.TocNode;
 import tsh.d94.app.server.apService.study.exception.StudyException;
 import tsh.d94.app.server.data.orm.study.studyAnnotation.SnStudyAnnotationAccess;
@@ -36,6 +38,8 @@ public class StudyDocumentService {
 	private final SnStudyTermAccess termAccess;
 	private final SnStudyAnnotationAccess annotationAccess;
 	private final StorageService storage;
+
+	private static final Pattern BLOCK_KEY = Pattern.compile("b\\d{1,9}");
 
 	/** 없거나 남의 문서면 404 (존재 여부를 노출하지 않는다) */
 	public SnStudyDocumentModel requireOwned(String id) {
@@ -87,6 +91,21 @@ public class StudyDocumentService {
 	private TocNode node(SnStudySectionModel s, Map<String, List<SnStudySectionModel>> children) {
 		return new TocNode(s.getObjId(), s.getTitle(), s.getLvl(), s.getPageSectionId(), s.getAnchorBlockKey(),
 			children.getOrDefault(s.getObjId(), List.of()).stream().map(c -> node(c, children)).toList());
+	}
+
+	/** 마지막 읽던 위치. 이 문서의 페이지 섹션만, 블록 키는 파서 형식(b + 숫자)만 받는다 */
+	@Transactional
+	public void savePosition(String id, PositionRequest req) {
+		SnStudyDocumentModel doc = requireReady(id);
+		String sectionId = req.sectionId();
+		boolean pageOfDoc = sectionId != null && sectionAccess.findByIdOptional(sectionId)
+			.filter(s -> id.equals(s.getDocumentId()) && sectionId.equals(s.getPageSectionId())).isPresent();
+		if (!pageOfDoc || (req.blockKey() != null && !BLOCK_KEY.matcher(req.blockKey()).matches())) {
+			throw new StudyException(INVALID_REQUEST);
+		}
+		doc.setLastSectionId(sectionId);
+		doc.setLastBlockKey(req.blockKey());
+		documentAccess.save(doc);
 	}
 
 	public InputStream figure(String id, String blockKey) {

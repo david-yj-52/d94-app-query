@@ -46,4 +46,12 @@ public class SnStudyDocumentModel extends BaseModel {
 	@Column(name = "PARSER_VERSION", length = 20)
 	private String parserVersion;
 
+	/** 마지막 읽던 페이지 섹션 (기기 간 이어 읽기) */
+	@Column(name = "LAST_SECTION_ID", length = 100)
+	private String lastSectionId;
+
+	/** 마지막으로 화면 맨 위에 있던 블록 */
+	@Column(name = "LAST_BLOCK_KEY", length = 10)
+	private String lastBlockKey;
+
 }

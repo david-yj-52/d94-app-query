@@ -1,12 +1,12 @@
 package tsh.d94.app.server.interfaces.controller.study;
 
-import java.io.InputStream;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import lombok.RequiredArgsConstructor;
 import tsh.d94.app.server.apService.study.StudyAnnotationService;
@@ -85,18 +84,19 @@ public class StudyController {
 		return ApiResponse.ok(pages.getPage(id, pageSectionId));
 	}
 
+	@PutMapping("/documents/{id}/position")
+	public ApiResponse<Void> savePosition(@PathVariable String id, @RequestBody PositionRequest req) {
+		documents.savePosition(id, req);
+		return ApiResponse.ok(null);
+	}
+
+	/** 동기로 흘려보낸다. StreamingResponseBody 는 ASYNC 재디스패치에서 JWT 필터가 안 돌아 403 이 났다 (AttachmentController 참고) */
 	@GetMapping("/documents/{id}/figures/{blockKey}")
-	public ResponseEntity<StreamingResponseBody> figure(@PathVariable String id, @PathVariable String blockKey) {
-		InputStream in = documents.figure(id, blockKey);
-		StreamingResponseBody body = out -> {
-			try (in) {
-				in.transferTo(out);
-			}
-		};
+	public ResponseEntity<InputStreamResource> figure(@PathVariable String id, @PathVariable String blockKey) {
 		return ResponseEntity.ok()
 			.contentType(MediaType.IMAGE_PNG)
 			.cacheControl(CacheControl.maxAge(1, TimeUnit.DAYS).cachePrivate())
-			.body(body);
+			.body(new InputStreamResource(documents.figure(id, blockKey)));
 	}
 
 	@GetMapping("/terms")

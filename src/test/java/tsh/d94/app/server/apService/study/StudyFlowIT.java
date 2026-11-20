@@ -112,6 +112,16 @@ class StudyFlowIT {
 		assertThat(page.next().title()).isEqualTo("Controls");
 		assertThat(documents.figure(docId, "b000006").readAllBytes()).hasSize(4);
 
+		// 마지막 위치: 이 문서의 페이지 섹션만 받는다
+		documents.savePosition(docId, new PositionRequest(page1, "b000004"));
+		assertThat(documents.get(docId)).extracting(DocumentResponse::lastSectionId, DocumentResponse::lastBlockKey)
+			.containsExactly(page1, "b000004");
+		String notPage = toc.get(0).id();
+		assertThatThrownBy(() -> documents.savePosition(docId, new PositionRequest(notPage, null)))
+			.isInstanceOf(tsh.d94.app.server.apService.study.exception.StudyException.class);
+		assertThatThrownBy(() -> documents.savePosition(docId, new PositionRequest(page1, "x'; drop")))
+			.isInstanceOf(tsh.d94.app.server.apService.study.exception.StudyException.class);
+
 		AnnotationListItem created = annotations.create(new CreateAnnotationRequest(docId, "b000005", 0, "b000005", 4, "yellow", "중요"));
 		assertThat(created.quote()).isEqualTo("What");
 		List<AnnotationListItem> notes = annotations.list(docId);

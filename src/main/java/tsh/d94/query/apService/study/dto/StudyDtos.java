@@ -19,12 +19,16 @@ public final class StudyDtos {
 	}
 
 	public record DocumentResponse(String id, String title, String fileName, long fileSize, Integer pageCount,
-		String status, String failReason, LocalDateTime createdAt) {
+		String status, String failReason, LocalDateTime createdAt, String lastSectionId, String lastBlockKey) {
 
 		public static DocumentResponse of(SnStudyDocumentModel d) {
 			return new DocumentResponse(d.getObjId(), d.getTitle(), d.getFileNm(), d.getFileSize(), d.getPageCount(),
-				d.getStatus(), d.getFailReason(), d.getCreatedAt());
+				d.getStatus(), d.getFailReason(), d.getCreatedAt(), d.getLastSectionId(), d.getLastBlockKey());
 		}
+	}
+
+	/** 마지막 읽던 위치. blockKey 는 없어도 된다 */
+	public record PositionRequest(String sectionId, String blockKey) {
 	}
 
 	public record TocNode(String id, String title, int level, String pageSectionId, String anchorBlockKey,
