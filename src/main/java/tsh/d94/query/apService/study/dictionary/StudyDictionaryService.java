@@ -26,7 +26,6 @@ public class StudyDictionaryService {
         var rows = data.keyReferences(Study.owner());
         return rows.isEmpty() ? new DictionaryKeyStatus(false, null) : new DictionaryKeyStatus(true, rows.get(0));
     }
-    @Transactional
     public DictionaryKeyStatus registerKey(String apiKey) {
         if (apiKey == null || !KEY.matcher(apiKey).matches()) throw new StudyException(StudyErrorCode.DICTIONARY_KEY_REJECTED);
         String reference = null;

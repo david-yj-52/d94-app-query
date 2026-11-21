@@ -73,6 +73,7 @@ public class PdfParserClient {
 			return rest.post().uri("/pdf/api/v1/syntax").contentType(MediaType.APPLICATION_JSON)
 				.body(new SyntaxRequest(blocks)).retrieve().body(SyntaxResponse.class);
 		} catch (Exception e) {
+			log.error("PDF syntax call failed", e);
 			throw new StudyException(StudyErrorCode.SYNTAX_UNAVAILABLE);
 		}
 	}
