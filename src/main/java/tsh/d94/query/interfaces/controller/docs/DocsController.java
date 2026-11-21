@@ -2,6 +2,12 @@ package tsh.d94.app.server.interfaces.controller.docs;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,6 +35,7 @@ import tsh.d94.app.server.apService.docs.DocsDtos.TaskStatusRequest;
 import tsh.d94.app.server.apService.docs.DocsDtos.VersionResponse;
 import tsh.d94.app.server.apService.docs.DocsEvolveService;
 import tsh.d94.app.server.apService.docs.DocsFolderService;
+import tsh.d94.app.server.apService.docs.DocsImageService;
 import tsh.d94.app.server.apService.docs.DocsNoteService;
 import tsh.d94.lib.core.interfaces.rest.ApiResponse;
 
@@ -41,6 +48,7 @@ public class DocsController {
 	private final DocsFolderService folders;
 	private final DocsNoteService notes;
 	private final DocsEvolveService evolve;
+	private final DocsImageService images;
 
 	// ── 폴더 ──
 
@@ -161,5 +169,24 @@ public class DocsController {
 	@PostMapping("/tasks/{noteId}/{lineNo}/promote")
 	public ApiResponse<NoteResponse> promoteTask(@PathVariable String noteId, @PathVariable int lineNo) {
 		return ApiResponse.ok(evolve.promoteTask(noteId, lineNo));
+	}
+
+	// ── 이미지 ──
+
+	/** 본문은 이미지 바이트(application/octet-stream). 형식은 서버가 앞 바이트로 판별 */
+	@PostMapping(value = "/images", consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+	public ApiResponse<Map<String, String>> uploadImage(@RequestBody byte[] body) {
+		return ApiResponse.ok(Map.of("id", images.upload(body)));
+	}
+
+	/** 동기 byte[] 응답 (StreamingResponseBody 는 ASYNC 재디스패치에서 JWT 필터가 안 돌아 403 — StudyController 참고) */
+	@GetMapping("/images/{id}")
+	public ResponseEntity<byte[]> image(@PathVariable String id) {
+		DocsImageService.Image img = images.get(id);
+		return ResponseEntity.ok()
+			.contentType(MediaType.parseMediaType(img.contentType()))
+			.cacheControl(CacheControl.maxAge(30, TimeUnit.DAYS).cachePrivate().immutable())
+			.header("X-Content-Type-Options", "nosniff")
+			.body(img.bytes());
 	}
 }

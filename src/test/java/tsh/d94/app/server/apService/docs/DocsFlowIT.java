@@ -168,4 +168,16 @@ class DocsFlowIT {
 		assertThat(evolve.lineage(dev.id())).filteredOn(n -> n.title().equals("아이디어"))
 			.extracting(DocsDtos.LineageNode::origin).containsOnlyNulls();
 	}
+
+	@Test
+	void versions_coalesceWithin5Minutes_sameTitle() {
+		NoteResponse n = notes.create(note("자동 저장", "v1"));
+		NoteResponse n2 = notes.update(n.id(), new NoteRequest(null, "v2", null, n.version()));
+		NoteResponse n3 = notes.update(n.id(), new NoteRequest(null, "v3", null, n2.version()));
+		// 버전 번호는 계속 오르고, 같은 제목 5분 안 저장은 이력 1건으로 합쳐진다
+		assertThat(n3.version()).isEqualTo(3);
+		assertThat(notes.versions(n.id())).extracting(DocsDtos.VersionResponse::content).containsExactly("v3");
+		notes.update(n.id(), new NoteRequest("자동 저장 2", "v4", null, n3.version())); // 제목 변경은 남김
+		assertThat(notes.versions(n.id())).extracting(DocsDtos.VersionResponse::title).containsExactly("자동 저장 2", "자동 저장");
+	}
 }
