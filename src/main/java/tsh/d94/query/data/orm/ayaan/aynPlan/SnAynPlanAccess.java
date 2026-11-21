@@ -30,7 +30,7 @@ public class SnAynPlanAccess extends AbstractCrudService<SnAynPlanModel, String>
 	}
 
 	public List<SnAynPlanModel> search(String projectKey) {
-		return repo.search(projectKey == null ? "%" : projectKey);
+		return repo.search(projectKey);
 	}
 
 	public List<SnAynPlanModel> findActive(String projectKey) {

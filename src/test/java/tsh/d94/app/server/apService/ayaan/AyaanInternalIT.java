@@ -341,6 +341,54 @@ class AyaanInternalIT {
 	}
 
 	@Test
+	void stage_clearsLastErrorOnResume_andSetsEndedAtOnTerminal() throws Exception {
+		String id = createPlan("P" + uniq(), 201);
+		mvc.perform(auth(post(BASE + "/plans/" + id + "/stage"),
+			"{\"expectedStage\":\"PREPARING\",\"nextStage\":\"HALTED\",\"lastError\":\"boom\"}"))
+			.andExpect(jsonPath("$.data.lastError").value("boom")).andExpect(jsonPath("$.data.endedAt").doesNotExist());
+		mvc.perform(auth(post(BASE + "/plans/" + id + "/stage"), "{\"expectedStage\":\"HALTED\",\"nextStage\":\"RUNNING\"}"))
+			.andExpect(status().isOk()).andExpect(jsonPath("$.data.lastError").doesNotExist());
+		mvc.perform(auth(post(BASE + "/plans/" + id + "/stage"), "{\"expectedStage\":\"RUNNING\",\"nextStage\":\"DONE\"}"))
+			.andExpect(status().isOk()).andExpect(jsonPath("$.data.endedAt").exists());
+	}
+
+	@Test
+	void stage_unknownIs400_andLeavingTerminalIs409() throws Exception {
+		String pk = "P" + uniq();
+		String id = createPlan(pk, 201);
+		stage(id, "PREPARING", "BOGUS", 400);
+		stage(id, "PREPARING", "A_VERY_LONG_STAGE_NAME_OVER_20", 400);
+		stage(id, "NOPE", "RUNNING", 400);
+		stage(id, "PREPARING", "CANCELLED", 200);
+		stage(id, "CANCELLED", "RUNNING", 409);
+		String id2 = createPlan(pk, 201); // 새 활성 계획이 생긴 뒤에도 옛 계획 부활은 409 (유니크 인덱스 500 아님)
+		stage(id, "CANCELLED", "RUNNING", 409);
+		mvc.perform(auth(get(BASE + "/plans/" + id2), null)).andExpect(jsonPath("$.data.stage").value("PREPARING"));
+		mvc.perform(auth(get(BASE + "/plans"), null)).andExpect(status().isOk());
+	}
+
+	@Test
+	void issueDone_noDoneTransitionOrNoReporter_changedFalse() throws Exception {
+		String email = CiraFixtures.uniqueEmail("ayaan");
+		TestContexts.login(email);
+		try {
+			fixtures.user(email);
+			ProjectResponse p = fixtures.project("SCRUM");
+			IssueResponse i = fixtures.issue(p.getId(), "twice", null);
+			String url = BASE + "/issues/by-key/" + i.getIssueKey() + "/done";
+			mvc.perform(auth(post(url), null)).andExpect(jsonPath("$.data.changed").value(true));
+			mvc.perform(auth(post(url), null)).andExpect(status().isOk()).andExpect(jsonPath("$.data.changed").value(false));
+			TestContexts.login(email); // MockMvc 요청이 끝나면 보안 컨텍스트가 비워진다
+			IssueResponse j = fixtures.issue(p.getId(), "orphan", null);
+			jdbc.update("UPDATE SN_CIRA_ISSUE SET REPORTER_ID = 'missing' WHERE ISSUE_KEY = ?", j.getIssueKey());
+			mvc.perform(auth(post(BASE + "/issues/by-key/" + j.getIssueKey() + "/done"), null))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.data.changed").value(false));
+		} finally {
+			TestContexts.clear();
+		}
+	}
+
+	@Test
 	void milestoneIssues_orderedByNumber() throws Exception {
 		String email = CiraFixtures.uniqueEmail("ayaan");
 		TestContexts.login(email);

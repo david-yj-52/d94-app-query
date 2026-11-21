@@ -321,20 +321,32 @@ public class AyaanService {
 		if (req.expectedStage() == null || req.nextStage() == null) {
 			throw new IllegalArgumentException("expectedStage and nextStage are required");
 		}
-		findPlan(id); // 없으면 404
+		if (!STAGES.contains(req.expectedStage()) || !STAGES.contains(req.nextStage())) {
+			throw new IllegalArgumentException("unknown stage (allowed: " + STAGES + ")");
+		}
+		String current = findPlan(id).getStage(); // 없으면 404
+		if (isTerminal(current)) {
+			throw new AyaanConflictException("plan " + id + " is already " + current, null);
+		}
 		if (planAccess.transition(id, req.expectedStage(), req.nextStage()) == 0) {
 			throw new AyaanConflictException("plan " + id + " is not in stage " + req.expectedStage(), null);
 		}
 		SnAynPlanModel p = findPlan(id);
 		if (req.currentIssueKey() != null) p.setCurrentIssueKey(req.currentIssueKey());
+		// 재개(HALTED 이후 RUNNING 등)에서 이전 오류가 남지 않도록 HALTED 가 아니면 lastError 를 비운다
 		if (req.lastError() != null) p.setLastError(req.lastError());
+		else if (!"HALTED".equals(req.nextStage())) p.setLastError(null);
 		if (req.endedAt() != null) p.setEndedAt(req.endedAt());
+		else if (isTerminal(req.nextStage())) p.setEndedAt(LocalDateTime.now());
 		return PlanDto.from(planAccess.savePlan(p));
 	}
 
 	private SnAynPlanModel findPlan(String id) {
 		return planAccess.get(id).orElseThrow(() -> new EntityNotFoundException("plan not found: " + id));
 	}
+
+	private static final java.util.Set<String> STAGES =
+		java.util.Set.of("PREPARING", "RUNNING", "MERGING", "DEPLOYING", "CLEANING", "DONE", "HALTED", "CANCELLED");
 
 	private static boolean isTerminal(String stage) {
 		return "DONE".equals(stage) || "CANCELLED".equals(stage);
@@ -410,8 +422,9 @@ public class AyaanService {
 		String prevTenant = TenantContext.get();
 		try {
 			TenantContext.set(TENANT);
-			var reporter = userAccess.findByIdOptional(issue.getReporterId())
-				.orElseThrow(() -> new EntityNotFoundException("reporter not found for " + issueKey));
+			// 보고자가 없으면 행위자를 정할 수 없다 → 상태 변경 없이 changed=false
+			var reporter = userAccess.findByIdOptional(issue.getReporterId()).orElse(null);
+			if (reporter == null) return false;
 			SecurityContext ctx = new SecurityContextImpl(new UsernamePasswordAuthenticationToken(reporter.getEmail(), null, List.of()));
 			SecurityContextHolder.setContext(ctx);
 			IssueStatusResponse done = issueService.getAvailableTransitions(issue.getObjId()).stream()

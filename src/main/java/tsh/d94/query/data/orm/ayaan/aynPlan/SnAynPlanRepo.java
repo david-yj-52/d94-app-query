@@ -12,8 +12,8 @@ import tsh.d94.lib.core.data.orm.common.repo.BaseJpaRepository;
 @Repository
 public interface SnAynPlanRepo extends BaseJpaRepository<SnAynPlanModel, String> {
 
-	/** projectKey 는 LIKE 패턴('%' = 전체) */
-	@Query("SELECT p FROM SnAynPlanModel p WHERE p.projectKey LIKE :projectKey ORDER BY p.createdAt DESC")
+	/** projectKey null = 전체 */
+	@Query("SELECT p FROM SnAynPlanModel p WHERE (:projectKey IS NULL OR p.projectKey = :projectKey) ORDER BY p.createdAt DESC")
 	List<SnAynPlanModel> search(@Param("projectKey") String projectKey);
 
 	@Query("SELECT p FROM SnAynPlanModel p WHERE p.projectKey = :projectKey AND p.stage NOT IN ('DONE', 'CANCELLED')")
