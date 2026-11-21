@@ -27,6 +27,8 @@ import tsh.d94.app.server.apService.study.StudyDocumentService;
 import tsh.d94.app.server.apService.study.StudyPageService;
 import tsh.d94.app.server.apService.study.StudyTermService;
 import tsh.d94.app.server.apService.study.StudyUploadService;
+import tsh.d94.app.server.apService.study.StudySyntaxService;
+import tsh.d94.app.server.apService.study.dictionary.StudyDictionaryService;
 import tsh.d94.app.server.apService.study.dto.StudyDtos.*;
 import tsh.d94.lib.core.interfaces.rest.ApiResponse;
 
@@ -41,6 +43,8 @@ public class StudyController {
 	private final StudyPageService pages;
 	private final StudyTermService terms;
 	private final StudyAnnotationService annotations;
+	private final StudyDictionaryService dictionary;
+	private final StudySyntaxService syntax;
 
 	@PostMapping("/documents/uploads")
 	public ApiResponse<StartUploadResponse> startUpload(@RequestBody StartUploadRequest req) {
@@ -83,6 +87,20 @@ public class StudyController {
 	public ApiResponse<PageResponse> page(@PathVariable String id, @PathVariable String pageSectionId) {
 		return ApiResponse.ok(pages.getPage(id, pageSectionId));
 	}
+
+	@GetMapping("/documents/{id}/pages/{pageSectionId}/syntax")
+	public ApiResponse<SyntaxResponse> syntax(@PathVariable String id, @PathVariable String pageSectionId) {
+		return ApiResponse.ok(syntax.getPageSyntax(id, pageSectionId));
+	}
+
+	@GetMapping("/dictionary")
+	public ApiResponse<DictionaryResponse> dictionary(@RequestParam String word) { return ApiResponse.ok(dictionary.lookup(word)); }
+	@GetMapping("/dictionary/key")
+	public ApiResponse<DictionaryKeyStatus> dictionaryKey() { return ApiResponse.ok(dictionary.keyStatus()); }
+	@PutMapping("/dictionary/key")
+	public ApiResponse<DictionaryKeyStatus> saveDictionaryKey(@RequestBody DictionaryKeyRequest req) { return ApiResponse.ok(dictionary.registerKey(req.apiKey())); }
+	@DeleteMapping("/dictionary/key")
+	public ApiResponse<Void> deleteDictionaryKey() { dictionary.deleteKey(); return ApiResponse.ok(null); }
 
 	@PutMapping("/documents/{id}/position")
 	public ApiResponse<Void> savePosition(@PathVariable String id, @RequestBody PositionRequest req) {
