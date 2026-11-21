@@ -63,6 +63,9 @@ public class ApTableName {
 	public static final String SN_STUDY_DICTIONARY_KEY = "SN_STUDY_DICTIONARY_KEY";
 	public static final String SN_STUDY_DICTIONARY = "SN_STUDY_DICTIONARY";
 	public static final String SN_STUDY_SYNTAX = "SN_STUDY_SYNTAX";
+	// docs (Obsidian형 개인 vault)
+	public static final String SN_DOCS_FOLDER = "SN_DOCS_FOLDER";
+	public static final String SN_DOCS_NOTE = "SN_DOCS_NOTE";
 	public static final String SN_AYN_TOOL = "SN_AYN_TOOL";
 	public static final String SN_AYN_WORKSPACE = "SN_AYN_WORKSPACE";
 	public static final String SN_AYN_TOOL_QUOTA = "SN_AYN_TOOL_QUOTA";
