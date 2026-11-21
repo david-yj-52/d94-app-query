@@ -32,10 +32,10 @@ public class SnCiraIssueLogModel extends BaseModel {
 	@Column(name = "FIELD_NM", length = 100, nullable = false)
 	private String fieldNm;
 
-	@Column(name = "OLD_VAL")
+	@Column(name = "OLD_VAL", columnDefinition = "text")
 	private String oldVal;
 
-	@Column(name = "NEW_VAL")
+	@Column(name = "NEW_VAL", columnDefinition = "text")
 	private String newVal;
 
 	@Column(name = "CHANGED_BY", length = 100, nullable = false)

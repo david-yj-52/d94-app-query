@@ -36,7 +36,7 @@ public class SnCiraIssueCfValueModel extends BaseModel {
 	@Column(name = "CUSTOM_FIELD_ID", length = 100, nullable = false)
 	private String customFieldId;
 
-	@Column(name = "VAL_TEXT")
+	@Column(name = "VAL_TEXT", columnDefinition = "text")
 	private String valText;
 
 	@Column(name = "VAL_NUMBER")
