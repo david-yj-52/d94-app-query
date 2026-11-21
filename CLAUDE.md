@@ -167,6 +167,23 @@ sequenceDiagram
 - 설정: `application.security.credential.{private-key, max-age-seconds, allow-plaintext}` ← `AUTH_CREDENTIAL_PRIVATE_KEY`, `AUTH_CREDENTIAL_MAX_AGE_SECONDS`, `AUTH_CREDENTIAL_ALLOW_PLAINTEXT`
 - 테스트: `CredentialCryptoServiceTest`(d94-web 모듈이 만든 픽스처 `src/test/resources/credential/web-envelope-fixture.json` 복호화 포함 — 픽스처 키는 테스트 전용), `EncryptedCredentialBodyAdviceTest`
 
+### API 토큰 (MCP·AI 도구)
+
+설계: d94-note `feature/user/3_api_token/api-token-plan.md`
+
+| 클래스 | 역할 |
+|---|---|
+| `config/ApiTokenSecurityConfig` | `@Order(2)` 체인. `Authorization: Bearer d94_…` 요청만 매칭. 필터는 `@Bean` 아님(서블릿 전역 자동 등록 방지). 성공 시 소유자 `D94UserDetails`·`TenantContext` 설정, 실패는 JSON `ApiResponse` 401/403 |
+| `apService/apiToken/ApiTokenScope` | 서비스별 허용 경로(context-path 제외). 지금은 `CIRA` 만. 목록 밖(`/api-tokens`·`/settings`·`/auth`·`/internal`·study 등)은 403 |
+| `apService/apiToken/ApiTokenService` | 발급(원문 1회, `SHA-256` hex 저장, 이름 1~100자, READ/WRITE, 30·90·365일, 사용자당 사용 중 20개), 조회, 폐기(`REVOKED_AT`), 서비스 on/off(`SN_SETTING` `api-token.{service}.enabled`, 없으면 허용), 요청 인증 |
+| `interfaces/controller/apiToken/ApiTokenController` | `GET·POST /api/v1/api-tokens`, `DELETE /{id}`(204, 남의 것 404), `GET /services`, `PUT /services/{service}` `{enabled}`(ADMIN) |
+
+- 토큰 형식 `d94_{service}_{base64url 32바이트}`. 토큰은 **발급 사용자로 동작**하므로 CIRA 권한 검사를 그대로 받는다(조회 권한이 열린 결함 [D18] 도 그대로).
+- 401: 없음·불일치·만료·폐기·소유자 `USE_STAT_CD≠Usable`. 403: 서비스 꺼짐·범위 밖·READ 토큰으로 GET/HEAD 외.
+- `LAST_USED_AT` 은 1분에 한 번만 갱신. 로그에는 토큰 원문 대신 `d94_{service}_…` 만.
+- MCP 는 UMD 를 거치지 않고 게이트웨이(`/tsh/**`)로 바로 호출(UMD 는 JWT 만 통과).
+- 테이블 `SN_API_TOKEN` (`V560`). 테스트: `ApiTokenScopeTest`, `ApiTokenIT`(실제 필터 체인).
+
 ### PDF 학습 뷰어 (study)
 
 설계: d94-note `docs/superpowers/specs/2026-11-09-pdf-study-viewer-design.md`
@@ -290,7 +307,7 @@ sequenceDiagram
 | 6  | `resultAction()` 응답 객체             | `MessageServerConfigApService.resultAction()` `null` 반환 (TODO 주석)             |
 | 7  | Custom 예외 처리                       | `AbstractApService.execute()`에 TODO 주석 (`ApService custom exception required`) |
 | 8  | `TestController` 운영 비활성화 방안    | 운영 환경 노출 제어 미정의                                                        |
-| 9  | HTTP 인증·인가                         | lib-core `SecurityConfig`(JWT, `/api/v1/auth/**` permitAll). 역할은 USER 고정(TODO). 로그인·가입 본문은 암호화 필수 |
+| 9  | HTTP 인증·인가                         | lib-core `SecurityConfig`(JWT, `/api/v1/auth/**` permitAll). 역할은 USER 고정(TODO). 로그인·가입 본문은 암호화 필수. MCP 용 API 토큰은 별도 체인(위 "API 토큰") |
 | 10 | `SolaceMessageInfoVo.msgObject` 보관   | `BytesXMLMessage` 직접 보관 시 메모리 해제 정책 미정의                            |
 | 11 | ~~HTTP 요청 tenant 미설정~~ (해결) | lib-core `JwtAuthenticationFilter` 가 로그인 사용자 `GS_USER.TENANT` 로 `TenantContext` 를 채우고 요청 끝에 비움 (아래 "Tenant 결정"). ifTest 의 tenant 인자 Repo 메서드는 그대로 둠 |
 | 12 | 패키지 선언 ↔ 폴더 불일치               | 파일은 `tsh/d94/query/**` 폴더, 선언은 `tsh.d94.app.server.*`. 스캔에 두 패키지를 모두 넣어 동작은 함 |
