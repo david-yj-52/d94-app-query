@@ -53,6 +53,9 @@ class ProjectControllerTest {
 		mvc.perform(get("/api/v1/projects/p-1")).andExpect(jsonPath("$.data.id").value("p-1"));
 		mvc.perform(put("/api/v1/projects/p-1").contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"m\"}"))
 			.andExpect(status().isOk());
+		mvc.perform(delete("/api/v1/projects/p-1")).andExpect(status().isOk())
+			.andExpect(jsonPath("$.code").value("204"));
+		then(projectService).should().deleteProject("p-1");
 	}
 
 	@Test

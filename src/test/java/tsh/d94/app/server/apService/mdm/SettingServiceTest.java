@@ -99,4 +99,26 @@ class SettingServiceTest {
 			.isInstanceOf(IllegalArgumentException.class);
 		verify(repo, never()).save(any());
 	}
+
+	@Test
+	void update_saves_cira_project_types_trimmed_and_deduped() {
+		when(repo.findByTenantAndSettingKey("T", "cira.project.types")).thenReturn(Optional.empty());
+
+		service.update(Map.of("cira.project.types", "[\" 웹개발 \", \"모바일\", \"웹개발\"]"));
+
+		ArgumentCaptor<SnSettingModel> saved = ArgumentCaptor.forClass(SnSettingModel.class);
+		verify(repo).save(saved.capture());
+		assertThat(saved.getValue().getSettingValue()).isEqualTo("[\"웹개발\",\"모바일\"]");
+	}
+
+	@Test
+	void update_rejects_invalid_cira_project_types() {
+		assertThatThrownBy(() -> service.update(Map.of("cira.project.types", "not-json")))
+			.isInstanceOf(IllegalArgumentException.class);
+		assertThatThrownBy(() -> service.update(Map.of("cira.project.types", "[\"\"]")))
+			.isInstanceOf(IllegalArgumentException.class);
+		assertThatThrownBy(() -> service.update(Map.of("cira.project.types", "[\"" + "a".repeat(31) + "\"]")))
+			.isInstanceOf(IllegalArgumentException.class);
+		verify(repo, never()).save(any());
+	}
 }

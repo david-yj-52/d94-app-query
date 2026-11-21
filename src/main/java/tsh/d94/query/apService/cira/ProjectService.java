@@ -114,7 +114,7 @@ public class ProjectService {
 		SnCiraBoardModel board = SnCiraBoardModel.builder()
 			.projectId(projectId)
 			.boardNm("Default Board")
-			.boardType(projectType != null ? projectType : "KANBAN")
+			.boardType("SCRUM".equalsIgnoreCase(projectType) ? "SCRUM" : "KANBAN")
 			.srvId(ApplicationProperties.getApplicationServiceName())
 			.tenant(TenantContext.get())
 			.traceId("INIT-PROJ")
@@ -227,6 +227,18 @@ public class ProjectService {
 		project.setEvtNm("UpdateProject");
 		projectAccess.save(project);
 		return mapToResponse(project);
+	}
+
+	@Transactional
+	public void deleteProject(String projectId) {
+		validateAdminAccess(projectId);
+		SnCiraProjectModel project = projectAccess.findById(projectId);
+		if (project.getDeletedAt() != null) {
+			throw new EntityNotFoundException("Project not found: " + projectId);
+		}
+		project.setDeletedAt(java.time.LocalDateTime.now());
+		project.setEvtNm("DeleteProject");
+		projectAccess.save(project);
 	}
 
 	public List<ProjectMemberResponse> getMembers(String projectId) {

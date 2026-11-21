@@ -58,6 +58,12 @@ public class ProjectController {
 		return ApiResponse.ok(projectService.updateProject(projectId, request));
 	}
 
+	@DeleteMapping("/{projectId}")
+	public ApiResponse<Void> deleteProject(@PathVariable String projectId) {
+		projectService.deleteProject(projectId);
+		return ApiResponse.noContent();
+	}
+
 	// ── 멤버 관리 ────────────────────────────────────────────────────────────
 
 	@GetMapping("/{projectId}/members")
