@@ -262,6 +262,13 @@ sequenceDiagram
 
 ---
 
+## Git 브랜치 · Worktree · 배포 원칙
+
+- **Worktree 분리 개발 (필수)**: 공용 작업 디렉토리에서 직접 개발하지 않고, 항상 최신 `main` 브랜치에서 별도 `git worktree`와 기능 브랜치를 생성해 개발합니다(`git worktree add -b feat/<작업명> ../wt-<작업명> origin/main`).
+- **푸시 및 머지 순서**: 개발·검증 완료 후 피처 브랜치를 원격에 `push`하고, 최신 `main`에 머지 → `deploy`에 머지 및 `push`하여 배포(GHCR 이미지 빌드)를 진행합니다. 머지 완료 후 사용한 worktree는 정리합니다.
+
+---
+
 ## 테스트
 
 상세: [docs/testing.md](docs/testing.md) · 결과·결함 목록: [docs/test-report.md](docs/test-report.md) · 작성 규칙 요약: [src/test/CLAUDE.md](src/test/CLAUDE.md)
