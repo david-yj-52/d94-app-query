@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
 import tsh.d94.app.server.apService.study.dto.StudyDtos.DocumentResponse;
+import tsh.d94.app.server.apService.study.dto.StudyDtos.StudyDocumentReparseRequestedEvent;
 import tsh.d94.app.server.apService.study.dto.StudyDtos.PositionRequest;
 import tsh.d94.app.server.apService.study.dto.StudyDtos.TocNode;
 import tsh.d94.app.server.apService.study.exception.StudyException;
@@ -40,6 +42,7 @@ public class StudyDocumentService {
 	private final SnStudyAnnotationAccess annotationAccess;
 	private final StorageService storage;
 	private final StudyReadingAidsAccess readingAids;
+	private final ApplicationEventPublisher events;
 
 	private static final Pattern BLOCK_KEY = Pattern.compile("b\\d{1,9}");
 
@@ -62,6 +65,22 @@ public class StudyDocumentService {
 
 	public DocumentResponse get(String id) {
 		return DocumentResponse.of(requireOwned(id));
+	}
+
+	@Transactional
+	public DocumentResponse reparse(String id) {
+		SnStudyDocumentModel doc = requireOwned(id);
+		if (Study.PARSING.equals(doc.getStatus())) {
+			throw new StudyException(NOT_READY, "이미 분석 중인 문서입니다.");
+		}
+		if (doc.getStorageKey() == null || storage.objectSize(doc.getStorageKey()) <= 0) {
+			throw new StudyException(INVALID_REQUEST, "원본 PDF를 찾을 수 없어 다시 분석할 수 없습니다.");
+		}
+		doc.setStatus(Study.PARSING);
+		doc.setFailReason(null);
+		documentAccess.save(doc);
+		events.publishEvent(new StudyDocumentReparseRequestedEvent(id));
+		return DocumentResponse.of(doc);
 	}
 
 	@Transactional

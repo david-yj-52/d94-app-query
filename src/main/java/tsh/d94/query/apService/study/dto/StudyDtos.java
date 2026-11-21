@@ -85,6 +85,9 @@ public final class StudyDtos {
 	public record StudyDocumentUploadedEvent(String documentId) {
 	}
 
+	public record StudyDocumentReparseRequestedEvent(String documentId) {
+	}
+
 	public record DictionarySense(String definition, String example) { }
 	public record DictionaryEntry(String headword, String pos, List<DictionarySense> senses) { }
 	public record DictionaryResponse(String word, String status, List<DictionaryEntry> entries, List<String> suggestions) { }
