@@ -59,6 +59,9 @@ public class ApTableName {
 	public static final String SN_STUDY_BLOCK = "SN_STUDY_BLOCK";
 	public static final String SN_STUDY_TERM = "SN_STUDY_TERM";
 	public static final String SN_STUDY_ANNOTATION = "SN_STUDY_ANNOTATION";
+	public static final String SN_STUDY_DICTIONARY_KEY = "SN_STUDY_DICTIONARY_KEY";
+	public static final String SN_STUDY_DICTIONARY = "SN_STUDY_DICTIONARY";
+	public static final String SN_STUDY_SYNTAX = "SN_STUDY_SYNTAX";
 	public static final String SN_AYN_CONFIG = "SN_AYN_CONFIG";
 	public static final String SN_AYN_TOOL = "SN_AYN_TOOL";
 	public static final String SN_AYN_WORKSPACE = "SN_AYN_WORKSPACE";

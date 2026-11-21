@@ -1,5 +1,12 @@
 # d94-query — 애플리케이션 서버
 
+## PDF 학습 읽기 도움
+
+- `/api/v1/study/dictionary`는 로그인 소유자의 Merriam-Webster 키와 사용자별 단어 응답 캐시를 사용합니다. 키 상태 DTO에는 원문을 절대 넣지 않습니다.
+- 키는 기존 `GitRepositoryService` AES 암복호화를 재사용합니다. 사전 호출 실패는 캐시하지 않고 `NOT_FOUND`도 캐시합니다.
+- `/api/v1/study/documents/{id}/pages/{pageSectionId}/syntax`는 d94-app-pdf `/pdf/api/v1/syntax` 결과를 `SN_STUDY_SYNTAX`에 저장합니다(조회는 분석기 버전을 무시, 업그레이드 시 테이블을 비웁니다).
+- 관련 마이그레이션: `V550__study_reading_aids.sql`.
+
 ## 프로젝트 개요
 
 | 항목              | 내용                                                               |
