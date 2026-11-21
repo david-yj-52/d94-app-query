@@ -35,7 +35,7 @@ public class SnCiraSavedFilterModel extends BaseModel {
 	@Column(name = "FILTER_NM", length = 200, nullable = false)
 	private String filterNm;
 
-	@Column(name = "JQL_QUERY")
+	@Column(name = "JQL_QUERY", columnDefinition = "text")
 	private String jqlQuery;
 
 	@Column(name = "SHARED_YN", length = 1, nullable = false)

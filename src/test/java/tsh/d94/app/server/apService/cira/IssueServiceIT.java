@@ -17,6 +17,7 @@ import org.springframework.transaction.UnexpectedRollbackException;
 import tsh.d94.app.server.apService.cira.dto.CreateIssueRequest;
 import tsh.d94.app.server.apService.cira.dto.IssueResponse;
 import tsh.d94.app.server.apService.cira.dto.ProjectResponse;
+import tsh.d94.app.server.apService.cira.dto.UpdateIssueRequest;
 import tsh.d94.app.server.apService.cira.exception.CiraException;
 import tsh.d94.app.server.support.CiraFixtures;
 import tsh.d94.app.server.support.IntegrationTest;
@@ -148,6 +149,23 @@ class IssueServiceIT {
 		String stored = jdbc.queryForObject(
 			"select content from sn_cira_issue where obj_id = ?", String.class, res.getId());
 		assertThat(stored).hasSize(1000);
+	}
+
+	@Test
+	@DisplayName("설명을 255자 넘게 수정해도 저장되고 변경 이력(old_val/new_val)이 남는다 — ddl-auto 가 text 를 varchar(255) 로 되돌리던 결함")
+	void updateIssue_withLongContent_isLogged() {
+		CreateIssueRequest req = fullRequest(null);
+		req.setContent("가".repeat(300));
+		IssueResponse res = issueService.createIssue(project.getId(), req);
+
+		UpdateIssueRequest upd = new UpdateIssueRequest();
+		upd.setContent("나".repeat(1000));
+		issueService.updateIssue(res.getId(), upd);
+
+		Map<String, Object> log = jdbc.queryForMap(
+			"select old_val, new_val from sn_cira_issue_log where issue_id = ? and field_nm = 'CONTENT'", res.getId());
+		assertThat((String) log.get("old_val")).hasSize(300);
+		assertThat((String) log.get("new_val")).hasSize(1000);
 	}
 
 	@Test

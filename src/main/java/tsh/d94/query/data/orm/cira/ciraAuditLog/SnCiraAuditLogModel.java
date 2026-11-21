@@ -47,7 +47,7 @@ public class SnCiraAuditLogModel extends BaseModel {
 	@Column(name = "IP_ADDR", length = 45)
 	private String ipAddr;
 
-	@Column(name = "USER_AGENT")
+	@Column(name = "USER_AGENT", columnDefinition = "text")
 	private String userAgent;
 
 }
