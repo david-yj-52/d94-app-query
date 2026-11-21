@@ -2,6 +2,8 @@ package tsh.d94.app.server.apService.ayaan;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -19,6 +21,20 @@ import lombok.RequiredArgsConstructor;
 import tsh.d94.app.server.apService.ayaan.dto.AyaanDtos.*;
 import tsh.d94.app.server.apService.mdm.SettingService;
 import tsh.d94.app.server.data.orm.ayaan.AynRefBase;
+import tsh.d94.app.server.apService.cira.IssueService;
+import tsh.d94.app.server.apService.cira.dto.ChangeStatusRequest;
+import tsh.d94.app.server.apService.cira.dto.IssueStatusResponse;
+import tsh.d94.app.server.data.orm.ayaan.aynPlan.SnAynPlanAccess;
+import tsh.d94.app.server.data.orm.ayaan.aynPlan.SnAynPlanModel;
+import tsh.d94.app.server.data.orm.ayaan.aynWorkspaceRepo.SnAynWorkspaceRepoAccess;
+import tsh.d94.app.server.data.orm.ayaan.aynWorkspaceRepo.SnAynWorkspaceRepoModel;
+import tsh.d94.app.server.data.orm.cira.ciraCiraIssueType.SnCiraCiraIssueTypeAccess;
+import tsh.d94.app.server.data.orm.cira.ciraCiraIssueType.SnCiraCiraIssueTypeModel;
+import tsh.d94.app.server.data.orm.cira.ciraIssue.SnCiraIssueModel;
+import tsh.d94.app.server.data.orm.cira.ciraIssueStatus.SnCiraIssueStatusAccess;
+import tsh.d94.app.server.data.orm.cira.ciraIssueStatus.SnCiraIssueStatusModel;
+import tsh.d94.app.server.data.orm.cira.ciraMilestone.SnCiraMilestoneAccess;
+import tsh.d94.app.server.data.orm.cira.ciraMilestoneIssue.SnCiraMilestoneIssueAccess;
 import tsh.d94.app.server.data.orm.ayaan.aynTask.SnAynTaskAccess;
 import tsh.d94.app.server.data.orm.ayaan.aynTask.SnAynTaskModel;
 import tsh.d94.app.server.data.orm.ayaan.aynTaskRun.SnAynTaskRunAccess;
@@ -34,6 +50,12 @@ import tsh.d94.app.server.data.orm.cira.ciraProject.SnCiraProjectAccess;
 import tsh.d94.lib.core.config.ApplicationProperties;
 import tsh.d94.lib.core.data.constant.UseStatCd;
 import tsh.d94.lib.core.data.orm.common.model.BaseModel;
+import tsh.d94.lib.core.data.orm.common.tenant.TenantContext;
+import tsh.d94.lib.core.data.orm.usersAndPermissions.gsUser.GsUserAccess;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextImpl;
 
 /** ayaan 내부 API 로직. 상태 전이·선점·lease 는 DB 의 조건부 UPDATE 한 문장으로 경쟁을 막는다. */
 @Service
@@ -52,6 +74,14 @@ public class AyaanService {
 	private final SnAynTaskRunAccess runAccess;
 	private final SnCiraIssueAccess issueAccess;
 	private final SnCiraProjectAccess projectAccess;
+	private final SnAynWorkspaceRepoAccess repoAccess;
+	private final SnAynPlanAccess planAccess;
+	private final SnCiraMilestoneAccess milestoneAccess;
+	private final SnCiraMilestoneIssueAccess milestoneIssueAccess;
+	private final SnCiraIssueStatusAccess statusAccess;
+	private final SnCiraCiraIssueTypeAccess issueTypeAccess;
+	private final IssueService issueService;
+	private final GsUserAccess userAccess;
 	private final ObjectMapper om;
 	private final PlatformTransactionManager txManager;
 
@@ -92,7 +122,7 @@ public class AyaanService {
 	}
 
 	public List<WorkspaceDto> getWorkspaces() {
-		return workspaceAccess.findAll().stream().map(AyaanService::toDto).toList();
+		return workspaceAccess.findAll().stream().map(this::toDto).toList();
 	}
 
 	@Transactional
@@ -106,13 +136,17 @@ public class AyaanService {
 		if (d.workspacePath() != null) w.setWorkspacePath(d.workspacePath());
 		if (d.defaultTool() != null) w.setDefaultTool(d.defaultTool());
 		w.setPromptTemplate(d.promptTemplate());
-		if (w.getWorkspacePath() == null) throw new IllegalArgumentException("workspacePath is required");
-		return toDto(workspaceAccess.save(w));
+		SnAynWorkspaceModel saved = workspaceAccess.save(w);
+		if (d.repos() != null) {
+			repoAccess.replaceAll(projectKey, d.repos().stream().map(r -> toModel(projectKey, r)).toList());
+		}
+		return toDto(saved);
 	}
 
 	@Transactional
 	public void deleteWorkspace(String projectKey) {
 		workspaceAccess.find(projectKey).orElseThrow(() -> new EntityNotFoundException("workspace not found: " + projectKey));
+		repoAccess.deleteByProjectKey(projectKey);
 		workspaceAccess.delete(projectKey);
 	}
 
@@ -145,6 +179,7 @@ public class AyaanService {
 		t.setSource(d.source());
 		t.setProjectKey(d.projectKey());
 		t.setWorkspacePath(d.workspacePath());
+		t.setPlanId(d.planId());
 		t.setPrompt(d.prompt());
 		t.setToolCd(d.toolCd());
 		t.setExhaustPolicy(d.exhaustPolicy());
@@ -249,6 +284,62 @@ public class AyaanService {
 		return taskAccess.recoverExpired();
 	}
 
+	// ── plan ───────────────────────────────────────────────────────────────
+
+	/** 프로젝트당 진행 중 계획은 DB 부분 유니크 인덱스(ux_ayn_plan_active)가 보장한다. 위반 시 기존 계획을 409 로 돌려준다. */
+	public PlanDto createPlan(PlanDto d) {
+		if (d.projectKey() == null || d.milestoneId() == null) throw new IllegalArgumentException("projectKey and milestoneId are required");
+		SnAynPlanModel p = SnAynPlanModel.builder().build();
+		stamp(p);
+		p.setProjectKey(d.projectKey());
+		p.setMilestoneId(d.milestoneId());
+		p.setMilestoneKey(d.milestoneKey());
+		p.setStage("PREPARING");
+		p.setStartedAt(LocalDateTime.now());
+		try {
+			return PlanDto.from(planAccess.insert(p));
+		} catch (DataIntegrityViolationException e) {
+			List<SnAynPlanModel> existing = planAccess.findActive(d.projectKey());
+			if (existing.isEmpty()) throw e;
+			throw new AyaanConflictException("active plan already exists for " + d.projectKey(), PlanDto.from(existing.get(0)));
+		}
+	}
+
+	public List<PlanDto> listPlans(String projectKey, Boolean active) {
+		return planAccess.search(projectKey).stream()
+			.filter(p -> active == null || active == !isTerminal(p.getStage()))
+			.map(PlanDto::from).toList();
+	}
+
+	public PlanDto getPlan(String id) {
+		return PlanDto.from(findPlan(id));
+	}
+
+	/** 조건부 전이: 현재 stage 가 expectedStage 가 아니면 409 */
+	@Transactional
+	public PlanDto changePlanStage(String id, PlanStageReq req) {
+		if (req.expectedStage() == null || req.nextStage() == null) {
+			throw new IllegalArgumentException("expectedStage and nextStage are required");
+		}
+		findPlan(id); // 없으면 404
+		if (planAccess.transition(id, req.expectedStage(), req.nextStage()) == 0) {
+			throw new AyaanConflictException("plan " + id + " is not in stage " + req.expectedStage(), null);
+		}
+		SnAynPlanModel p = findPlan(id);
+		if (req.currentIssueKey() != null) p.setCurrentIssueKey(req.currentIssueKey());
+		if (req.lastError() != null) p.setLastError(req.lastError());
+		if (req.endedAt() != null) p.setEndedAt(req.endedAt());
+		return PlanDto.from(planAccess.savePlan(p));
+	}
+
+	private SnAynPlanModel findPlan(String id) {
+		return planAccess.get(id).orElseThrow(() -> new EntityNotFoundException("plan not found: " + id));
+	}
+
+	private static boolean isTerminal(String stage) {
+		return "DONE".equals(stage) || "CANCELLED".equals(stage);
+	}
+
 	// ── run ────────────────────────────────────────────────────────────────
 
 	public RunDto createRun(String taskId, RunDto d) {
@@ -284,6 +375,54 @@ public class AyaanService {
 		var i = issueAccess.findByIssueKey(issueKey).orElseThrow(() -> new EntityNotFoundException("issue not found: " + issueKey));
 		String projectKey = projectAccess.findProjectKeyById(i.getProjectId()).orElse(null);
 		return new IssueDto(i.getIssueKey(), i.getTitle(), i.getContent(), projectKey);
+	}
+
+	public List<MilestoneDto> milestones(String projectKey) {
+		var project = projectAccess.findByProjectKey(projectKey).orElseThrow(() -> new EntityNotFoundException("project not found: " + projectKey));
+		return milestoneAccess.findByProjectId(project.getObjId()).stream()
+			.map(m -> new MilestoneDto(m.getObjId(), m.getMilestoneNm())).toList();
+	}
+
+	public List<MilestoneIssueDto> milestoneIssues(String milestoneId) {
+		List<String> issueIds = milestoneIssueAccess.findByMilestoneId(milestoneId).stream().map(mi -> mi.getIssueId()).toList();
+		List<SnCiraIssueModel> issues = issueAccess.findByIds(issueIds).stream().filter(i -> i.getDeletedAt() == null).toList();
+		Map<String, String> category = new HashMap<>();
+		issues.stream().map(SnCiraIssueModel::getProjectId).distinct()
+			.forEach(pid -> statusAccess.findByProjectId(pid).forEach(s -> category.put(s.getObjId(), s.getCategory())));
+		Map<String, String> typeNm = new HashMap<>();
+		for (SnCiraCiraIssueTypeModel t : issueTypeAccess.findAllUsable()) typeNm.put(t.getObjId(), t.getTypeNm());
+		return issues.stream()
+			.map(i -> new MilestoneIssueDto(i.getIssueKey(), issueNo(i.getIssueKey()), typeNm.get(i.getIssueTypeId()), category.get(i.getStatusId())))
+			.sorted(Comparator.comparingInt(MilestoneIssueDto::issueNo)).toList();
+	}
+
+	private static int issueNo(String issueKey) {
+		return Integer.parseInt(issueKey.substring(issueKey.lastIndexOf('-') + 1));
+	}
+
+	/**
+	 * 현재 상태에서 갈 수 있는 첫 DONE 카테고리 상태로 변경한다. 갈 수 없으면 false.
+	 * IssueService 는 로그인 사용자·tenant 컨텍스트를 요구하므로 이슈 보고자를 행위자로 잠시 세운다.
+	 */
+	public boolean markIssueDone(String issueKey) {
+		SnCiraIssueModel issue = issueAccess.findByIssueKey(issueKey).orElseThrow(() -> new EntityNotFoundException("issue not found: " + issueKey));
+		SecurityContext prev = SecurityContextHolder.getContext();
+		String prevTenant = TenantContext.get();
+		try {
+			TenantContext.set(TENANT);
+			var reporter = userAccess.findByIdOptional(issue.getReporterId())
+				.orElseThrow(() -> new EntityNotFoundException("reporter not found for " + issueKey));
+			SecurityContext ctx = new SecurityContextImpl(new UsernamePasswordAuthenticationToken(reporter.getEmail(), null, List.of()));
+			SecurityContextHolder.setContext(ctx);
+			IssueStatusResponse done = issueService.getAvailableTransitions(issue.getObjId()).stream()
+				.filter(s -> "DONE".equals(s.getCategory())).findFirst().orElse(null);
+			if (done == null) return false;
+			issueService.changeStatus(issue.getObjId(), om.convertValue(Map.of("statusId", done.getId()), ChangeStatusRequest.class));
+			return true;
+		} finally {
+			SecurityContextHolder.setContext(prev);
+			if (prevTenant == null) TenantContext.clear(); else TenantContext.set(prevTenant);
+		}
 	}
 
 	// ── helpers ────────────────────────────────────────────────────────────
@@ -335,8 +474,20 @@ public class AyaanService {
 			t.getMaxConcurrency(), t.getFallbackResetRule(), t.getBudgetTokens(), t.getBudgetPeriod());
 	}
 
-	private static WorkspaceDto toDto(SnAynWorkspaceModel w) {
-		return new WorkspaceDto(w.getProjectKey(), w.getWorkspacePath(), w.getDefaultTool(), w.getPromptTemplate());
+	private WorkspaceDto toDto(SnAynWorkspaceModel w) {
+		List<RepoDto> repos = repoAccess.findByProjectKey(w.getProjectKey()).stream()
+			.map(r -> new RepoDto(r.getRepoNm(), r.getGitUrl(), r.getBaseBranch(), r.getDeployBranch(), (int) r.getSortOrd())).toList();
+		return new WorkspaceDto(w.getProjectKey(), w.getWorkspacePath(), w.getDefaultTool(), w.getPromptTemplate(), repos);
+	}
+
+	private static SnAynWorkspaceRepoModel toModel(String projectKey, RepoDto r) {
+		if (r.repoNm() == null || r.gitUrl() == null) throw new IllegalArgumentException("repoNm and gitUrl are required");
+		SnAynWorkspaceRepoModel m = stamp(SnAynWorkspaceRepoModel.builder().projectKey(projectKey).repoNm(r.repoNm()).build());
+		m.setGitUrl(r.gitUrl());
+		m.setBaseBranch(r.baseBranch() != null ? r.baseBranch() : "main");
+		m.setDeployBranch(r.deployBranch());
+		m.setSortOrd(r.sortOrd() != null ? r.sortOrd().shortValue() : 0);
+		return m;
 	}
 
 	private static QuotaDto toDto(SnAynToolQuotaModel q) {

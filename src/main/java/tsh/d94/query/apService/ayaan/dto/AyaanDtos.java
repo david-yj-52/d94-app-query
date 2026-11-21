@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
+import tsh.d94.app.server.data.orm.ayaan.aynPlan.SnAynPlanModel;
 import tsh.d94.app.server.data.orm.ayaan.aynTask.SnAynTaskModel;
 import tsh.d94.app.server.data.orm.ayaan.aynTaskRun.SnAynTaskRunModel;
 
@@ -18,7 +19,29 @@ public final class AyaanDtos {
 		Integer maxConcurrency, String fallbackResetRule, Long budgetTokens, String budgetPeriod) {
 	}
 
-	public record WorkspaceDto(String projectKey, String workspacePath, String defaultTool, String promptTemplate) {
+	/** repos 는 PUT 에서 null 이면 건드리지 않고, 리스트면 전체 교체한다. GET 은 sortOrd 순. */
+	public record WorkspaceDto(String projectKey, String workspacePath, String defaultTool, String promptTemplate, List<RepoDto> repos) {
+	}
+
+	public record RepoDto(String repoNm, String gitUrl, String baseBranch, String deployBranch, Integer sortOrd) {
+	}
+
+	public record PlanDto(String id, String projectKey, String milestoneId, String milestoneKey, String stage, String currentIssueKey,
+		String lastError, LocalDateTime startedAt, LocalDateTime endedAt) {
+
+		public static PlanDto from(SnAynPlanModel p) {
+			return new PlanDto(p.getObjId(), p.getProjectKey(), p.getMilestoneId(), p.getMilestoneKey(), p.getStage(),
+				p.getCurrentIssueKey(), p.getLastError(), p.getStartedAt(), p.getEndedAt());
+		}
+	}
+
+	public record PlanStageReq(String expectedStage, String nextStage, String currentIssueKey, String lastError, LocalDateTime endedAt) {
+	}
+
+	public record MilestoneIssueDto(String issueKey, int issueNo, String issueTypeNm, String statusCategory) {
+	}
+
+	public record MilestoneDto(String id, String name) {
 	}
 
 	public record QuotaDto(String toolCd, String windowCd, BigDecimal usedPct, Long usedTokens, Long limitTokens,
@@ -44,7 +67,7 @@ public final class AyaanDtos {
 		String toolCd, String exhaustPolicy, String fallbackTools, String status, String cliSessionId, LocalDateTime resumeAt,
 		String pauseReason, Integer resumeCount, String leaseOwner, LocalDateTime leaseUntil, String resultSummary,
 		String failReason, LocalDateTime startedAt, LocalDateTime finishedAt, LocalDateTime createdAt,
-		List<RunDto> runs, TokenTotals tokenTotals) {
+		String planId, List<RunDto> runs, TokenTotals tokenTotals) {
 
 		public static TaskDto from(SnAynTaskModel t) {
 			return from(t, null, null);
@@ -54,7 +77,7 @@ public final class AyaanDtos {
 			return new TaskDto(t.getObjId(), t.getIssueKey(), t.getSource(), t.getProjectKey(), t.getWorkspacePath(), t.getPrompt(),
 				t.getToolCd(), t.getExhaustPolicy(), t.getFallbackTools(), t.getStatus(), t.getCliSessionId(), t.getResumeAt(),
 				t.getPauseReason(), t.getResumeCount(), t.getLeaseOwner(), t.getLeaseUntil(), t.getResultSummary(),
-				t.getFailReason(), t.getStartedAt(), t.getFinishedAt(), t.getCreatedAt(), runs, totals);
+				t.getFailReason(), t.getStartedAt(), t.getFinishedAt(), t.getCreatedAt(), t.getPlanId(), runs, totals);
 		}
 	}
 
