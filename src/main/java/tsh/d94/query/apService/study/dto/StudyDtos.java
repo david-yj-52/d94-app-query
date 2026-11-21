@@ -84,4 +84,12 @@ public final class StudyDtos {
 
 	public record StudyDocumentUploadedEvent(String documentId) {
 	}
+
+	public record DictionarySense(String definition, String example) { }
+	public record DictionaryEntry(String headword, String pos, List<DictionarySense> senses) { }
+	public record DictionaryResponse(String word, String status, List<DictionaryEntry> entries, List<String> suggestions) { }
+	public record DictionaryKeyRequest(String apiKey) { }
+	public record DictionaryKeyStatus(boolean registered, String reference) { }
+	public record SyntaxSpan(String blockKey, int start, int end, String role) { }
+	public record SyntaxResponse(String analyzerVersion, List<SyntaxSpan> spans) { }
 }
