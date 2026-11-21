@@ -27,6 +27,7 @@ class DocsFlowIT {
 
 	@Autowired DocsNoteService notes;
 	@Autowired DocsFolderService folders;
+	@Autowired DocsEvolveService evolve;
 
 	private String me;
 
@@ -123,5 +124,48 @@ class DocsFlowIT {
 		NoteResponse theirs = notes.create(note("같은 제목", "다른 사람 노트")); // 제목은 vault 마다 유일
 		assertThat(theirs.id()).isNotEqualTo(mine.id());
 		assertThat(notes.titles("같")).isEqualTo(List.of("같은 제목"));
+	}
+
+	@Test
+	void evolve_derive_kind_tasks_promote_lineage() {
+		NoteResponse idea = notes.create(note("아이디어", "#씨앗\n- [ ] 설계하기 📅 2026-12-01\n- [ ] 시안 만들기"));
+		assertThat(idea.kind()).isEqualTo("idea");
+
+		// 승격: kind 만 바뀌고 버전 +1
+		NoteResponse doc = evolve.changeKind(idea.id(), "doc");
+		assertThat(doc.kind()).isEqualTo("doc");
+		assertThat(doc.content()).startsWith("---\nkind: doc\n---\n#씨앗");
+		assertThat(doc.version()).isEqualTo(2);
+		assertThat(codeOf(catchThrowable(() -> evolve.changeKind(idea.id(), "weird"))))
+			.isEqualTo(DocsException.Code.INVALID_REQUEST);
+
+		// 파생(브로드캐스트): origin·stream 이 붙은 새 노트, 원본의 파생 목록에 보인다
+		NoteResponse dev = evolve.derive(idea.id(), new DocsDtos.DeriveRequest("개발 설계", "dev", null));
+		assertThat(dev.kind()).isEqualTo("doc");
+		assertThat(dev.stream()).isEqualTo("dev");
+		assertThat(dev.origin()).isEqualTo("아이디어");
+		assertThat(notes.list(null, null, null, null, null, "아이디어")).extracting(NoteSummary::title).containsExactly("개발 설계");
+
+		// Task: frontmatter 3줄 뒤 줄 번호. 상태 변경은 그 줄만 고친다
+		List<DocsDtos.TaskResponse> tasks = evolve.tasks(null, null, null, null);
+		assertThat(tasks).extracting(DocsDtos.TaskResponse::lineNo).containsExactly(4, 5); // 마감 있는 것이 먼저
+		assertThat(tasks.get(0).dueDt()).isEqualTo(java.time.LocalDate.of(2026, 12, 1));
+		NoteResponse afterCheck = evolve.setTaskStatus(idea.id(), 4, "done");
+		assertThat(afterCheck.content()).contains("- [x] 설계하기");
+		assertThat(evolve.tasks("done", null, null, null)).hasSize(1);
+		assertThat(codeOf(catchThrowable(() -> evolve.setTaskStatus(idea.id(), 0, "done"))))
+			.isEqualTo(DocsException.Code.VERSION_CONFLICT); // frontmatter 줄은 체크박스가 아님
+
+		// Task → 노트 승격: 줄이 [[제목]] 으로, 새 노트는 kind task + origin
+		NoteResponse promoted = evolve.promoteTask(idea.id(), 5);
+		assertThat(promoted.title()).isEqualTo("시안 만들기");
+		assertThat(promoted.kind()).isEqualTo("task");
+		assertThat(notes.get(idea.id()).content()).contains("- [ ] [[시안 만들기]]");
+
+		// 계보: 어느 노드에서 물어도 루트(아이디어)부터 전체
+		assertThat(evolve.lineage(promoted.id())).extracting(DocsDtos.LineageNode::title)
+			.containsExactlyInAnyOrder("아이디어", "개발 설계", "시안 만들기");
+		assertThat(evolve.lineage(dev.id())).filteredOn(n -> n.title().equals("아이디어"))
+			.extracting(DocsDtos.LineageNode::origin).containsOnlyNulls();
 	}
 }

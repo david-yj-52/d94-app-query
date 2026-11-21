@@ -1,5 +1,6 @@
 package tsh.d94.app.server.interfaces.controller.docs;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -13,14 +14,20 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
+import tsh.d94.app.server.apService.docs.DocsDtos.DeriveRequest;
 import tsh.d94.app.server.apService.docs.DocsDtos.FolderRequest;
 import tsh.d94.app.server.apService.docs.DocsDtos.FolderResponse;
+import tsh.d94.app.server.apService.docs.DocsDtos.KindRequest;
+import tsh.d94.app.server.apService.docs.DocsDtos.LineageNode;
 import tsh.d94.app.server.apService.docs.DocsDtos.MoveFolderRequest;
 import tsh.d94.app.server.apService.docs.DocsDtos.MoveNoteRequest;
 import tsh.d94.app.server.apService.docs.DocsDtos.NoteRequest;
 import tsh.d94.app.server.apService.docs.DocsDtos.NoteResponse;
 import tsh.d94.app.server.apService.docs.DocsDtos.NoteSummary;
+import tsh.d94.app.server.apService.docs.DocsDtos.TaskResponse;
+import tsh.d94.app.server.apService.docs.DocsDtos.TaskStatusRequest;
 import tsh.d94.app.server.apService.docs.DocsDtos.VersionResponse;
+import tsh.d94.app.server.apService.docs.DocsEvolveService;
 import tsh.d94.app.server.apService.docs.DocsFolderService;
 import tsh.d94.app.server.apService.docs.DocsNoteService;
 import tsh.d94.lib.core.interfaces.rest.ApiResponse;
@@ -33,6 +40,7 @@ public class DocsController {
 
 	private final DocsFolderService folders;
 	private final DocsNoteService notes;
+	private final DocsEvolveService evolve;
 
 	// ── 폴더 ──
 
@@ -117,5 +125,41 @@ public class DocsController {
 	@GetMapping("/notes/{id}/backlinks")
 	public ApiResponse<List<NoteSummary>> backlinks(@PathVariable String id) {
 		return ApiResponse.ok(notes.backlinks(id));
+	}
+
+	// ── 진화 ──
+
+	@PostMapping("/notes/{id}/derive")
+	public ApiResponse<NoteResponse> derive(@PathVariable String id, @RequestBody DeriveRequest req) {
+		return ApiResponse.ok(evolve.derive(id, req));
+	}
+
+	@PutMapping("/notes/{id}/kind")
+	public ApiResponse<NoteResponse> changeKind(@PathVariable String id, @RequestBody KindRequest req) {
+		return ApiResponse.ok(evolve.changeKind(id, req.kind()));
+	}
+
+	@GetMapping("/notes/{id}/lineage")
+	public ApiResponse<List<LineageNode>> lineage(@PathVariable String id) {
+		return ApiResponse.ok(evolve.lineage(id));
+	}
+
+	@GetMapping("/tasks")
+	public ApiResponse<List<TaskResponse>> tasks(@RequestParam(required = false) String status,
+		@RequestParam(required = false) String tag, @RequestParam(required = false) String stream,
+		@RequestParam(required = false) LocalDate dueBefore) {
+		return ApiResponse.ok(evolve.tasks(status, tag, stream, dueBefore));
+	}
+
+	@PutMapping("/tasks/{noteId}/{lineNo}")
+	public ApiResponse<NoteResponse> setTaskStatus(@PathVariable String noteId, @PathVariable int lineNo,
+		@RequestBody TaskStatusRequest req) {
+		return ApiResponse.ok(evolve.setTaskStatus(noteId, lineNo, req.status()));
+	}
+
+	/** 체크박스 줄을 노트로 승격, 새 노트를 돌려준다 */
+	@PostMapping("/tasks/{noteId}/{lineNo}/promote")
+	public ApiResponse<NoteResponse> promoteTask(@PathVariable String noteId, @PathVariable int lineNo) {
+		return ApiResponse.ok(evolve.promoteTask(noteId, lineNo));
 	}
 }
