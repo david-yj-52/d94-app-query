@@ -2,7 +2,6 @@ package tsh.d94.app.server.apService.ayaan;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -18,9 +17,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import tsh.d94.app.server.apService.ayaan.dto.AyaanDtos.*;
+import tsh.d94.app.server.apService.mdm.SettingService;
 import tsh.d94.app.server.data.orm.ayaan.AynRefBase;
-import tsh.d94.app.server.data.orm.ayaan.aynConfig.SnAynConfigAccess;
-import tsh.d94.app.server.data.orm.ayaan.aynConfig.SnAynConfigModel;
 import tsh.d94.app.server.data.orm.ayaan.aynTask.SnAynTaskAccess;
 import tsh.d94.app.server.data.orm.ayaan.aynTask.SnAynTaskModel;
 import tsh.d94.app.server.data.orm.ayaan.aynTaskRun.SnAynTaskRunAccess;
@@ -43,8 +41,10 @@ import tsh.d94.lib.core.data.orm.common.model.BaseModel;
 public class AyaanService {
 
 	private static final String TENANT = "TSH";
+	/** 전역 정책은 기준정보(SN_SETTING)에 이 접두사로 저장 (V545) */
+	private static final String CONFIG_PREFIX = "ayaan.";
 
-	private final SnAynConfigAccess configAccess;
+	private final SettingService settingService;
 	private final SnAynToolAccess toolAccess;
 	private final SnAynWorkspaceAccess workspaceAccess;
 	private final SnAynToolQuotaAccess quotaAccess;
@@ -58,19 +58,11 @@ public class AyaanService {
 	// ── config / tool / workspace / quota ──────────────────────────────────
 
 	public Map<String, String> getConfig() {
-		Map<String, String> m = new LinkedHashMap<>();
-		configAccess.findAll().forEach(c -> m.put(c.getConfigKey(), c.getConfigValue()));
-		return m;
+		return settingService.getGroup(TENANT, CONFIG_PREFIX);
 	}
 
-	@Transactional
 	public Map<String, String> putConfig(Map<String, String> values) {
-		values.forEach((k, v) -> {
-			SnAynConfigModel c = configAccess.find(k).orElseGet(() -> stamp(SnAynConfigModel.builder().configKey(k).build()));
-			c.setConfigValue(v);
-			configAccess.save(c);
-		});
-		return getConfig();
+		return settingService.putGroup(TENANT, CONFIG_PREFIX, values);
 	}
 
 	public List<ToolDto> getTools() {
