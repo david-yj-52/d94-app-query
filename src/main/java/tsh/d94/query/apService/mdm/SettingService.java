@@ -48,6 +48,27 @@ public class SettingService {
 		return getAll();
 	}
 
+	/** 접두사(예: "ayaan.") 키를 접두사 없이 돌려준다. 기능 서비스 전용 — 값 검증은 그 기능이 한다 */
+	public Map<String, String> getGroup(String tenant, String prefix) {
+		Map<String, String> result = new TreeMap<>();
+		repo.findByTenantAndUseStatCd(tenant, UseStatCd.Usable).stream()
+			.filter(s -> s.getSettingKey().startsWith(prefix))
+			.forEach(s -> result.put(s.getSettingKey().substring(prefix.length()), s.getSettingValue()));
+		return result;
+	}
+
+	/** getGroup 의 쓰기. 허용 키 검사를 하지 않으므로 호출하는 기능이 검증한 값만 넘긴다 */
+	@Transactional
+	public Map<String, String> putGroup(String tenant, String prefix, Map<String, String> values) {
+		values.forEach((key, value) -> {
+			SnSettingModel row = repo.findByTenantAndSettingKey(tenant, prefix + key)
+				.orElseGet(() -> newRow(tenant, prefix + key));
+			row.setSettingValue(value);
+			repo.save(row);
+		});
+		return getGroup(tenant, prefix);
+	}
+
 	private static String validate(String key, String value) {
 		String v = value == null ? "" : value.trim();
 		switch (key) {

@@ -19,9 +19,11 @@ class AyaanSchemaIT {
 
 	@Test
 	void seedConfigHasSpecDefaults() {
-		assertThat(jdbc.queryForObject("SELECT CONFIG_VALUE FROM SN_AYN_CONFIG WHERE CONFIG_KEY='EXHAUST_POLICY'", String.class))
+		// V545 이관: SN_AYN_CONFIG → SN_SETTING 'ayaan.*'
+		assertThat(jdbc.queryForObject("SELECT SETTING_VALUE FROM SN_SETTING WHERE TENANT='TSH' AND SETTING_KEY='ayaan.EXHAUST_POLICY'", String.class))
 			.isEqualTo("WAIT_SAME_TOOL");
-		assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM SN_AYN_CONFIG", Integer.class)).isEqualTo(12);
+		assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM SN_SETTING WHERE SETTING_KEY LIKE 'ayaan.%'", Integer.class)).isEqualTo(12);
+		assertThat(jdbc.queryForObject("SELECT to_regclass('sn_ayn_config') IS NULL", Boolean.class)).isTrue();
 	}
 
 	@Test
