@@ -10,6 +10,7 @@ public class ApTableName {
 	public static final String ST_ORG_UNIT_DEF = "ST_ORG_UNIT_DEF";
 	public static final String ST_ORG_WRKR_REL = "ST_ORG_WRKR_REL";
 	public static final String SN_SETTING = "SN_SETTING";
+	public static final String SN_API_TOKEN = "SN_API_TOKEN";
 	public static final String SN_CIRA_PROJECT = "SN_CIRA_PROJECT";
 	public static final String SN_CIRA_PROJECT_MEMBER = "SN_CIRA_PROJECT_MEMBER";
 	public static final String SN_CIRA_SPRINT = "SN_CIRA_SPRINT";
