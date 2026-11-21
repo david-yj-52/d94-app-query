@@ -19,6 +19,7 @@ import tsh.d94.app.server.apService.study.dto.StudyDtos.DocumentResponse;
 import tsh.d94.app.server.apService.study.dto.StudyDtos.PositionRequest;
 import tsh.d94.app.server.apService.study.dto.StudyDtos.TocNode;
 import tsh.d94.app.server.apService.study.exception.StudyException;
+import tsh.d94.app.server.data.orm.study.readingAids.StudyReadingAidsAccess;
 import tsh.d94.app.server.data.orm.study.studyAnnotation.SnStudyAnnotationAccess;
 import tsh.d94.app.server.data.orm.study.studyBlock.SnStudyBlockAccess;
 import tsh.d94.app.server.data.orm.study.studyDocument.SnStudyDocumentAccess;
@@ -38,6 +39,7 @@ public class StudyDocumentService {
 	private final SnStudyTermAccess termAccess;
 	private final SnStudyAnnotationAccess annotationAccess;
 	private final StorageService storage;
+	private final StudyReadingAidsAccess readingAids;
 
 	private static final Pattern BLOCK_KEY = Pattern.compile("b\\d{1,9}");
 
@@ -66,6 +68,7 @@ public class StudyDocumentService {
 	public void delete(String id) {
 		SnStudyDocumentModel doc = requireOwned(id);
 		annotationAccess.deleteByDocumentId(id);
+		readingAids.deleteSyntaxByDocumentId(id);
 		termAccess.deleteByDocumentId(id);
 		blockAccess.deleteByDocumentId(id);
 		sectionAccess.deleteByDocumentId(id);

@@ -2,8 +2,11 @@ package tsh.d94.app.server.apService.study.parser;
 
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.util.List;
 
 import org.springframework.core.io.ByteArrayResource;
+import tsh.d94.app.server.apService.study.exception.StudyErrorCode;
+import tsh.d94.app.server.apService.study.exception.StudyException;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.http.client.MultipartBodyBuilder;
@@ -62,6 +65,16 @@ public class PdfParserClient {
 		} catch (Exception e) {
 			log.error("PDF parser call failed", e);
 			throw new ParserFailure(SERVER_ERROR);
+		}
+	}
+
+	public SyntaxResponse syntax(List<SyntaxRequest.Block> blocks) {
+		try {
+			return rest.post().uri("/pdf/api/v1/syntax").contentType(MediaType.APPLICATION_JSON)
+				.body(new SyntaxRequest(blocks)).retrieve().body(SyntaxResponse.class);
+		} catch (Exception e) {
+			log.error("PDF syntax call failed", e);
+			throw new StudyException(StudyErrorCode.SYNTAX_UNAVAILABLE);
 		}
 	}
 }
