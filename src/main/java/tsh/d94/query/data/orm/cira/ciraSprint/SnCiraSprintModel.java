@@ -32,7 +32,7 @@ public class SnCiraSprintModel extends BaseModel {
 	@Column(name = "SPRINT_NM", length = 200, nullable = false)
 	private String sprintNm;
 
-	@Column(name = "GOAL")
+	@Column(name = "GOAL", columnDefinition = "text")
 	private String goal;
 
 	@Column(name = "START_DT")
