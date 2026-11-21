@@ -78,6 +78,11 @@ public class StudyController {
 		return ApiResponse.ok(null);
 	}
 
+	@PostMapping("/documents/{id}/reparse")
+	public ApiResponse<DocumentResponse> reparseDocument(@PathVariable String id) {
+		return ApiResponse.ok(documents.reparse(id));
+	}
+
 	@GetMapping("/documents/{id}/toc")
 	public ApiResponse<List<TocNode>> toc(@PathVariable String id) {
 		return ApiResponse.ok(documents.toc(id));

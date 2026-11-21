@@ -37,6 +37,10 @@ public class SnStudyBlockAccess extends AbstractCrudService<SnStudyBlockModel, S
 		return repo.findByDocumentIdAndOrdBetweenOrderByOrd(documentId, from, to);
 	}
 
+	public List<SnStudyBlockModel> findByDocumentIdOrderByOrd(String documentId) {
+		return repo.findByDocumentIdOrderByOrd(documentId);
+	}
+
 	@Transactional
 	public int deleteByDocumentId(String documentId) {
 		return repo.deleteByDocumentId(documentId);

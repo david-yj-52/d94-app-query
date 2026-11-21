@@ -23,6 +23,8 @@ public interface SnStudyBlockRepo extends BaseJpaRepository<SnStudyBlockModel, S
 
 	List<SnStudyBlockModel> findByDocumentIdAndOrdBetweenOrderByOrd(String documentId, Integer from, Integer to);
 
+	List<SnStudyBlockModel> findByDocumentIdOrderByOrd(String documentId);
+
 	@Modifying
 	@Query("delete from SnStudyBlockModel m where m.documentId = :documentId")
 	int deleteByDocumentId(@Param("documentId") String documentId);
