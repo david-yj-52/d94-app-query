@@ -62,7 +62,15 @@ public class DocsIndexAccess {
 
 	// ── 버전 ──
 
+	/**
+	 * 버전 이력 1건. 자동 저장으로 이력이 폭증하지 않게, 같은 사람이 5분 안에 같은 제목으로 다시 저장하면
+	 * 직전 이력을 지우고 새 것으로 바꾼다(제목 변경은 의미 있는 사건이라 남김).
+	 */
 	public void addVersion(String noteId, int version, String title, String content, String editedBy) {
+		jdbc.update("delete from SN_DOCS_NOTE_VER v where v.NOTE_ID=? and v.EDITED_BY=? and v.TITLE=? "
+				+ "and v.EDITED_AT > CURRENT_TIMESTAMP - interval '5 minutes' "
+				+ "and v.VERSION=(select max(VERSION) from SN_DOCS_NOTE_VER where NOTE_ID=?)",
+			noteId, editedBy, title, noteId);
 		jdbc.update("insert into SN_DOCS_NOTE_VER(NOTE_ID,VERSION,TITLE,CONTENT,EDITED_BY) values(?,?,?,?,?)",
 			noteId, version, title, content, editedBy);
 	}

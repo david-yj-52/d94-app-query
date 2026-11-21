@@ -213,11 +213,12 @@ sequenceDiagram
 | `apService/docs/DocsNoteService` | 노트 CRUD. 저장마다 버전 1건 + 색인 교체, 제목 변경 시 백링크 노트의 `[[옛 제목]]` 치환, `version` 불일치 409, 제목에 `[]|#` 금지 |
 | `apService/docs/DocsFolderService` | 폴더 트리. 같은 상위 안 이름 중복 409, 자기 하위로 이동 400, 비어 있지 않은 폴더 삭제 409 |
 | `apService/docs/DocsEvolveService` | 승격(frontmatter kind), 파생(origin·stream 붙은 새 노트), Task 상태(그 줄만 치환, 줄이 바뀌었으면 409), Task→노트 승격, 계보(재귀 CTE) |
-| `data/orm/docs/docsIndex/DocsIndexAccess` | 버전·링크·태그·Task·목록·백링크·계보 SQL (JdbcTemplate) |
+| `apService/docs/DocsImageService` | 붙여넣은 이미지: `POST /images`(octet-stream, 5MB, 앞 바이트로 PNG·JPEG·GIF·WebP 만 — SVG·HTML 거부) → MinIO `docs/images/{SHA-256(소유자) 앞 16바이트}/{uuid}`, `GET /images/{id}` 는 로그인 소유자 경로에서만 찾음(남의 것 404), `nosniff`·private 30일 캐시. 메타 테이블 없음 |
+| `data/orm/docs/docsIndex/DocsIndexAccess` | 버전·링크·태그·Task·목록·백링크·계보 SQL (JdbcTemplate). `addVersion` 은 같은 사람이 5분 안에 같은 제목으로 다시 저장하면 직전 이력을 바꿔치기(자동 저장 이력 폭증 방지, 제목 변경은 남김) |
 
 - 테이블 `SN_DOCS_FOLDER`·`SN_DOCS_NOTE`(엔티티, `@Audited` 미사용, 물리 삭제) + `SN_DOCS_NOTE_VER`·`LINK`·`TAG`·`TASK`(JDBC 전용, 노트 삭제 시 CASCADE) — `V570`. 엔티티 컬럼 길이는 V570 과 같게 둔다(`ddl-auto=update` 가 엔티티 기준으로 ALTER).
 - 소유자 = 로그인 이메일(`OWNER_ID`), 남의 데이터 404. 제목은 `(TENANT, OWNER_ID, TITLE)` 유일. 링크 대상은 제목으로 저장하고 조회 때 맞춘다(없는 노트 링크 허용).
-- 테스트: `DocsMarkdownIndexerTest`, `DocsFlowIT`.
+- 테스트: `DocsMarkdownIndexerTest`, `DocsImageServiceTest`, `DocsFlowIT`.
 
 ### Tenant 결정
 
