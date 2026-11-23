@@ -12,6 +12,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import tsh.d94.app.server.apService.study.dto.StudyDtos.StudyDocumentUploadedEvent;
+import tsh.d94.app.server.apService.study.dto.StudyDtos.StudyDocumentReparseRequestedEvent;
 import tsh.d94.app.server.apService.study.parser.ParserFailure;
 import tsh.d94.app.server.apService.study.parser.ParserResponse;
 import tsh.d94.app.server.apService.study.parser.PdfParserClient;
@@ -38,6 +39,12 @@ public class StudyParseService {
 	@Async("studyParseExecutor")
 	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
 	public void onUploaded(StudyDocumentUploadedEvent event) {
+		parse(event.documentId());
+	}
+
+	@Async("studyParseExecutor")
+	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+	public void onReparseRequested(StudyDocumentReparseRequestedEvent event) {
 		parse(event.documentId());
 	}
 
@@ -70,7 +77,8 @@ public class StudyParseService {
 	}
 
 	private void fail(SnStudyDocumentModel doc, String reason) {
-		doc.setStatus(Study.FAILED);
+		// 재파싱에 실패하면 기존 구조가 그대로 있으므로 계속 열 수 있게 READY 로 되돌린다.
+		doc.setStatus(doc.getPageCount() != null && doc.getPageCount() > 0 ? Study.READY : Study.FAILED);
 		doc.setFailReason(reason);
 		documentAccess.save(doc);
 	}
