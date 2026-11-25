@@ -23,6 +23,30 @@ class ApiTokenScopeTest {
 	}
 
 	@Test
+	void eachServiceHasOnlyItsPaths() {
+		assertThat(ApiTokenScope.DOCS.allows("/api/v1/docs/notes/n1")).isTrue();
+		assertThat(ApiTokenScope.DOCS.allows("/api/v1/projects")).isFalse();
+		assertThat(ApiTokenScope.STUDY.allows("/api/v1/study/documents")).isTrue();
+		assertThat(ApiTokenScope.INTERFACE_TEST.allows("/api/v1/interface-tests/1")).isTrue();
+		assertThat(ApiTokenScope.ownerOf("/api/v1/docs/folders")).isEqualTo(ApiTokenScope.DOCS);
+		assertThat(ApiTokenScope.ownerOf("/api/v1/settings")).isNull();
+	}
+
+	@Test
+	void allCoversEveryServiceButNotAdminPaths() {
+		ApiTokenScope all = ApiTokenScope.ALL;
+		assertThat(all.allows("/api/v1/projects/p1")).isTrue();
+		assertThat(all.allows("/api/v1/docs/notes")).isTrue();
+		assertThat(all.allows("/api/v1/study/documents")).isTrue();
+		assertThat(all.allows("/api/v1/interface-tests")).isTrue();
+		assertThat(all.allows("/api/v1/api-tokens")).isFalse();
+		assertThat(all.allows("/api/v1/settings")).isFalse();
+		assertThat(all.allows("/api/v1/auth/login")).isFalse();
+		assertThat(all.allows("/api/v1/internal/ayaan/config")).isFalse();
+		assertThat(all.allows("/api/mdm/config")).isFalse();
+	}
+
+	@Test
 	void ofIsCaseInsensitiveAndRejectsUnknown() {
 		assertThat(ApiTokenScope.of("CIRA")).isEqualTo(ApiTokenScope.CIRA);
 		assertThatThrownBy(() -> ApiTokenScope.of("nope")).isInstanceOf(IllegalArgumentException.class);
