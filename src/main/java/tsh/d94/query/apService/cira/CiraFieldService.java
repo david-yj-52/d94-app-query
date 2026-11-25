@@ -30,6 +30,7 @@ import lombok.RequiredArgsConstructor;
 import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.Catalog;
 import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.Field;
 import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.FieldKeys;
+import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.LibraryItem;
 import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.ProjectType;
 import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.SaveCustomField;
 import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.SaveType;
@@ -79,14 +80,19 @@ public class CiraFieldService {
 	private final jakarta.persistence.EntityManager entityManager;
 
 	private static Field sys(String key, String name, String fieldType) {
-		return new Field(key, name, "sys", fieldType, null, false, true, null, true, null);
+		return new Field(key, name, "sys", fieldType, null, false, true, null, true, null, null, null, null, null, false);
 	}
 
 	// ── 카탈로그 · 프로젝트 타입 (기준정보, 쓰기는 컨트롤러에서 ADMIN) ─────────
 
 	public Catalog catalog() {
-		return new Catalog(SYSTEM, access.globalFields(tenant()).stream()
-			.map(cf -> toField(cf, null, true)).toList());
+		List<CustomField> globals = access.globalFields(tenant());
+		Map<String, List<Field>> typeFields = new LinkedHashMap<>();
+		access.types(tenant()).forEach(t -> typeFields.put(t.id(),
+			access.typeFields(tenant(), t.id()).stream().map(cf -> toField(cf, null, true, null)).toList()));
+		Map<String, Integer> copies = new LinkedHashMap<>();
+		globals.forEach(g -> copies.put(g.id(), access.copiesOf(g.id())));
+		return new Catalog(SYSTEM, globals.stream().map(cf -> toField(cf, null, true, null)).toList(), typeFields, copies);
 	}
 
 	public List<ProjectType> types() {
@@ -120,6 +126,8 @@ public class CiraFieldService {
 		if (used > 0) {
 			throw new ResponseStatusException(HttpStatus.CONFLICT, "이 타입을 쓰는 프로젝트가 " + used + "개 있어 삭제할 수 없습니다");
 		}
+		// 타입 필드 값의 FK 때문에 CASCADE 가 막히지 않도록 타입 필드를 먼저 지운다
+		access.typeFields(tenant(), id).forEach(cf -> access.deleteCustomField(cf.id()));
 		access.deleteType(id);
 	}
 
@@ -127,8 +135,8 @@ public class CiraFieldService {
 	@Transactional
 	public ProjectType replaceTypeFields(String id, List<TypeField> fields) {
 		requireType(id);
-		Set<String> globalCf = access.globalFields(tenant()).stream()
-			.filter(cf -> cf.projectId() == null).map(cf -> "cf:" + cf.id()).collect(Collectors.toSet());
+		Set<String> ownCf = access.typeFields(tenant(), id).stream().map(cf -> "cf:" + cf.id()).collect(Collectors.toSet());
+		Set<String> globalCf = access.globalFields(tenant()).stream().map(cf -> "cf:" + cf.id()).collect(Collectors.toSet());
 		Set<String> seen = new LinkedHashSet<>();
 		List<CiraFieldAccess.TypeField> rows = new ArrayList<>();
 		for (TypeField f : fields) {
@@ -136,7 +144,10 @@ public class CiraFieldService {
 			if (FIXED.contains(key)) {
 				continue;
 			}
-			if (!SYSTEM_BY_KEY.containsKey(key) && !globalCf.contains(key)) {
+			if (globalCf.contains(key)) {
+				throw new IllegalArgumentException("전역 필드는 먼저 타입으로 가져와야 세트에 넣을 수 있습니다: " + key);
+			}
+			if (!SYSTEM_BY_KEY.containsKey(key) && !ownCf.contains(key)) {
 				throw new IllegalArgumentException("타입 세트에 넣을 수 없는 필드입니다: " + key);
 			}
 			if (!seen.add(key)) {
@@ -166,60 +177,151 @@ public class CiraFieldService {
 		return t;
 	}
 
-	// ── 사용자 정의 필드 ─────────────────────────────
+	// ── 사용자 정의 필드: 전역 · 타입 (기준정보, 쓰기는 컨트롤러에서 ADMIN) ─────
 
+	/** copyToTypeIds 가 있으면 그 타입들로 바로 복사한다 (설계 5.2) */
 	@Transactional
 	public Field createGlobalField(SaveCustomField req) {
-		return createField(null, req);
-	}
-
-	@Transactional
-	public Field updateGlobalField(String id, SaveCustomField req) {
-		return updateField(requireField(id, null), req);
-	}
-
-	@Transactional
-	public void deleteGlobalField(String id) {
-		access.deleteCustomField(requireField(id, null).id());
-	}
-
-	public Usage usage(String id) {
-		int[] u = access.customFieldUsage(requireField(id, null).id());
-		return new Usage(u[0], u[1]);
-	}
-
-	/** 프로젝트 전용 필드. 만들면 바로 그 프로젝트의 추가 필드가 된다 */
-	@Transactional
-	public Field createProjectField(String projectId, SaveCustomField req) {
-		requireAdmin(projectId);
-		Field f = createField(projectId, req);
-		List<String> keys = new ArrayList<>(access.projectFields(projectId));
-		keys.add(f.fieldKey());
-		access.replaceProjectFields(projectId, keys);
+		Field f = createField(null, null, req, currentUserId());
+		if (req.copyToTypeIds() != null) {
+			req.copyToTypeIds().stream().distinct().forEach(typeId -> importToType(typeId, id(f)));
+		}
 		return f;
 	}
 
 	@Transactional
+	public Field updateGlobalField(String id, SaveCustomField req) {
+		return updateField(requireField(id, null, null), req);
+	}
+
+	/** 원본만 지운다. 복사본(다른 id)과 그 값은 남는다 */
+	@Transactional
+	public void deleteGlobalField(String id) {
+		access.deleteCustomField(requireField(id, null, null).id());
+	}
+
+	/** 전역·타입 필드의 사용량: 복사본 수, 이 필드 자신을 쓰는 프로젝트·Task 수 */
+	public Usage usage(String id) {
+		CustomField cf = access.customField(tenant(), id);
+		if (cf == null || cf.projectId() != null) {
+			throw new jakarta.persistence.EntityNotFoundException("사용자 정의 필드를 찾을 수 없습니다: " + id);
+		}
+		int[] u = access.customFieldUsage(cf.id());
+		return new Usage(access.copiesOf(cf.id()), u[0], u[1]);
+	}
+
+	@Transactional
+	public Field createTypeField(String typeId, SaveCustomField req) {
+		requireType(typeId);
+		return createField(null, typeId, req, currentUserId());
+	}
+
+	@Transactional
+	public Field updateTypeField(String typeId, String id, SaveCustomField req) {
+		return updateField(requireField(id, null, typeId), req);
+	}
+
+	/** 타입 필드와 그 세트 참조·값을 지운다. 프로젝트가 가져간 복사본은 남는다 */
+	@Transactional
+	public void deleteTypeField(String typeId, String id) {
+		access.deleteCustomField(requireField(id, null, typeId).id());
+	}
+
+	/** 전역 필드를 타입 필드로 복사 */
+	@Transactional
+	public Field importToType(String typeId, String sourceFieldId) {
+		requireType(typeId);
+		return copyField(requireField(sourceFieldId, null, null), null, typeId);
+	}
+
+	// ── 사용자 정의 필드: 프로젝트 (멤버) ─────────────────────
+
+	/** 가져올 수 있는 것: 전역 + 이 프로젝트 타입의 타입 필드 중 기본 세트에 없는 것 */
+	public List<LibraryItem> library(String projectId) {
+		requireMember(projectId);
+		Map<String, String> imported = new HashMap<>();
+		access.projectCustomFields(tenant(), projectId).stream().filter(cf -> cf.sourceFieldId() != null)
+			.forEach(cf -> imported.putIfAbsent(cf.sourceFieldId(), "cf:" + cf.id()));
+		List<CustomField> items = new ArrayList<>(access.globalFields(tenant()));
+		String typeId = projectAccess.findById(projectId).getProjectTypeId();
+		if (typeId != null) {
+			Set<String> inSet = access.typeSet(typeId).stream().map(CiraFieldAccess.TypeField::fieldKey).collect(Collectors.toSet());
+			access.typeFields(tenant(), typeId).stream().filter(cf -> !inSet.contains("cf:" + cf.id())).forEach(items::add);
+		}
+		return items.stream().map(cf -> new LibraryItem(toField(cf, null, true, null), imported.get(cf.id()))).toList();
+	}
+
+	/** 전역 필드 또는 이 프로젝트 타입의 타입 필드를 프로젝트 필드로 복사하고 추가 필드 끝에 붙인다 */
+	@Transactional
+	public Field importToProject(String projectId, String sourceFieldId) {
+		requireMember(projectId);
+		CustomField src = access.customField(tenant(), sourceFieldId);
+		String typeId = projectAccess.findById(projectId).getProjectTypeId();
+		boolean global = src != null && src.projectId() == null && src.projectTypeId() == null;
+		boolean ownType = src != null && src.projectTypeId() != null && src.projectTypeId().equals(typeId);
+		if (!global && !ownType) {
+			throw new jakarta.persistence.EntityNotFoundException("가져올 수 있는 필드가 아닙니다: " + sourceFieldId);
+		}
+		if (ownType && access.typeSet(typeId).stream().anyMatch(tf -> tf.fieldKey().equals("cf:" + src.id()))) {
+			throw new IllegalArgumentException("이미 이 타입의 기본 세트로 적용된 필드입니다");
+		}
+		Field copy = copyField(src, projectId, null);
+		appendProjectField(projectId, copy.fieldKey());
+		return projectField(projectId, copy.fieldKey());
+	}
+
+	/** 프로젝트 전용 필드. 프로젝트 멤버 누구나 만들고, 만들면 바로 그 프로젝트의 추가 필드가 된다 */
+	@Transactional
+	public Field createProjectField(String projectId, SaveCustomField req) {
+		requireMember(projectId);
+		Field f = createField(projectId, null, req, currentUserId());
+		appendProjectField(projectId, f.fieldKey());
+		return projectField(projectId, f.fieldKey());
+	}
+
+	@Transactional
 	public Field updateProjectField(String projectId, String id, SaveCustomField req) {
-		requireAdmin(projectId);
-		return updateField(requireField(id, projectId), req);
+		CustomField cf = requireField(id, projectId, null);
+		requireEditor(projectId, cf);
+		updateField(cf, req);
+		return projectField(projectId, "cf:" + id);
 	}
 
 	@Transactional
 	public void deleteProjectField(String projectId, String id) {
-		requireAdmin(projectId);
-		access.deleteCustomField(requireField(id, projectId).id());
+		CustomField cf = requireField(id, projectId, null);
+		requireEditor(projectId, cf);
+		access.deleteCustomField(cf.id());
 	}
 
-	private Field createField(String projectId, SaveCustomField req) {
+	private void appendProjectField(String projectId, String key) {
+		List<String> keys = new ArrayList<>(access.projectFields(projectId));
+		keys.add(key);
+		access.replaceProjectFields(projectId, keys);
+	}
+
+	/** 이 프로젝트 유효 필드 중 하나 (canEdit 이 현재 사용자 기준으로 채워진 것) */
+	private Field projectField(String projectId, String key) {
+		return effective(projectId).stream().filter(f -> f.fieldKey().equals(key)).findFirst().orElseThrow();
+	}
+
+	private Field createField(String projectId, String typeId, SaveCustomField req, String createdBy) {
 		String name = fieldName(req.fieldNm());
 		if (req.fieldType() == null || !FIELD_TYPES.contains(req.fieldType())) {
 			throw new IllegalArgumentException("지원하지 않는 필드 타입입니다: " + req.fieldType());
 		}
-		ensureUniqueName(projectId, name, null);
-		String id = access.insertCustomField(tenant(), projectId, null, name, req.fieldType(), Boolean.TRUE.equals(req.required()),
-			optionsJson(req.fieldType(), req.options()), null, null);
-		return toField(access.customField(tenant(), id), null, true);
+		ensureUniqueName(projectId, typeId, name, null);
+		String id = access.insertCustomField(tenant(), projectId, typeId, name, req.fieldType(), Boolean.TRUE.equals(req.required()),
+			optionsJson(req.fieldType(), req.options()), null, createdBy);
+		return toField(access.customField(tenant(), id), null, true, null);
+	}
+
+	/** 원본의 이름·필드 타입·선택지·필수 여부를 그대로 새 행으로 (설계 F3) */
+	private Field copyField(CustomField src, String projectId, String typeId) {
+		ensureUniqueName(projectId, typeId, src.fieldNm(), null);
+		String id = access.insertCustomField(tenant(), projectId, typeId, src.fieldNm(), src.fieldType(), src.required(),
+			src.optionsJson(), src.id(), currentUserId());
+		return toField(access.customField(tenant(), id), null, true, null);
 	}
 
 	private Field updateField(CustomField cf, SaveCustomField req) {
@@ -227,9 +329,9 @@ public class CiraFieldService {
 			throw new IllegalArgumentException("필드 타입은 만든 뒤 바꿀 수 없습니다");
 		}
 		String name = fieldName(req.fieldNm());
-		ensureUniqueName(cf.projectId(), name, cf.id());
+		ensureUniqueName(cf.projectId(), cf.projectTypeId(), name, cf.id());
 		access.updateCustomField(cf.id(), name, Boolean.TRUE.equals(req.required()), optionsJson(cf.fieldType(), req.options()));
-		return toField(access.customField(tenant(), cf.id()), null, true);
+		return toField(access.customField(tenant(), cf.id()), null, true, null);
 	}
 
 	// ── 프로젝트 유효 필드 (설계 5.2) ────────────────────
@@ -248,8 +350,8 @@ public class CiraFieldService {
 		List<String> clean = new ArrayList<>(new LinkedHashSet<>(keys));
 		clean.removeIf(FIXED::contains);
 		for (String key : clean) {
-			if (resolve(key, cfs) == null) {
-				throw new IllegalArgumentException("이 프로젝트에서 쓸 수 없는 필드입니다: " + key);
+			if (resolve(key, cfs, null) == null) {
+				throw new IllegalArgumentException("이 프로젝트에서 쓸 수 없는 필드입니다 (사용자 정의 필드는 라이브러리에서 가져오세요): " + key);
 			}
 		}
 		access.replaceProjectFields(projectId, clean);
@@ -259,18 +361,19 @@ public class CiraFieldService {
 	List<Field> effective(String projectId) {
 		SnCiraProjectModel project = projectAccess.findById(projectId);
 		Map<String, CustomField> cfs = visibleCustomFields(projectId);
+		Viewer viewer = viewer(projectId);
 		Map<String, Field> out = new LinkedHashMap<>();
 		FIXED.forEach(k -> out.put(k, withSource(SYSTEM_BY_KEY.get(k), "fixed", true)));
 		if (project.getProjectTypeId() != null) {
 			for (CiraFieldAccess.TypeField tf : access.typeSet(project.getProjectTypeId())) {
-				Field f = resolve(tf.fieldKey(), cfs);
+				Field f = resolve(tf.fieldKey(), cfs, viewer);
 				if (f != null) {
 					out.putIfAbsent(f.fieldKey(), withSource(f, "type", tf.defaultVisible()));
 				}
 			}
 		}
 		for (String key : access.projectFields(projectId)) {
-			Field f = resolve(key, cfs);
+			Field f = resolve(key, cfs, viewer);
 			if (f != null) {
 				out.putIfAbsent(key, withSource(f, "project", true));
 			}
@@ -479,10 +582,11 @@ public class CiraFieldService {
 		return name;
 	}
 
-	/** projectId null = 전역 필드만, 아니면 그 프로젝트 전용 필드만 */
-	private CustomField requireField(String id, String projectId) {
+	/** 소속이 정확히 (projectId, typeId) 인 필드. 둘 다 null = 전역 */
+	private CustomField requireField(String id, String projectId, String typeId) {
 		CustomField cf = access.customField(tenant(), id);
-		if (cf == null || !java.util.Objects.equals(cf.projectId(), projectId)) {
+		if (cf == null || !java.util.Objects.equals(cf.projectId(), projectId)
+			|| !java.util.Objects.equals(cf.projectTypeId(), typeId)) {
 			throw new jakarta.persistence.EntityNotFoundException("사용자 정의 필드를 찾을 수 없습니다: " + id);
 		}
 		return cf;
@@ -496,13 +600,13 @@ public class CiraFieldService {
 		return name;
 	}
 
-	/** 같은 범위(전역 / 그 프로젝트)에서 이름 중복 금지. 전역 null 은 DB UNIQUE 가 못 막는다 */
-	private void ensureUniqueName(String projectId, String name, String selfId) {
-		boolean dup = (projectId == null ? access.globalFields(tenant()) : access.projectCustomFields(tenant(), projectId)).stream()
-			.anyMatch(cf -> java.util.Objects.equals(cf.projectId(), projectId) && cf.fieldNm().equals(name)
-				&& !cf.id().equals(selfId));
-		if (dup) {
-			throw new IllegalArgumentException("이미 있는 필드 이름입니다: " + name);
+	/** 같은 소속(전역 / 그 타입 / 그 프로젝트) 안에서 이름 중복 금지. 전역·타입은 PROJECT_ID null 이라 DB UNIQUE 가 못 막는다 */
+	private void ensureUniqueName(String projectId, String typeId, String name, String selfId) {
+		List<CustomField> same = projectId != null ? access.projectCustomFields(tenant(), projectId)
+			: typeId != null ? access.typeFields(tenant(), typeId) : access.globalFields(tenant());
+		if (same.stream().anyMatch(cf -> cf.fieldNm().equals(name) && !cf.id().equals(selfId))) {
+			throw new IllegalArgumentException(projectId != null ? "이 프로젝트에 같은 이름의 필드가 있습니다: " + name
+				: typeId != null ? "이 타입에 같은 이름의 필드가 있습니다: " + name : "이미 있는 필드 이름입니다: " + name);
 		}
 	}
 
@@ -518,32 +622,69 @@ public class CiraFieldService {
 		return writeJson(clean);
 	}
 
+	/** 유효 필드 계산에 쓰는 사용자 정의 필드: 이 프로젝트 타입의 타입 필드(세트 참조용) + 이 프로젝트 필드 */
 	private Map<String, CustomField> visibleCustomFields(String projectId) {
-		return java.util.stream.Stream.concat(access.globalFields(tenant()).stream(),
-				access.projectCustomFields(tenant(), projectId).stream())
-			.collect(Collectors.toMap(CustomField::id, Function.identity()));
+		String typeId = projectAccess.findById(projectId).getProjectTypeId();
+		List<CustomField> all = new ArrayList<>(access.projectCustomFields(tenant(), projectId));
+		if (typeId != null) {
+			all.addAll(access.typeFields(tenant(), typeId));
+		}
+		return all.stream().collect(Collectors.toMap(CustomField::id, Function.identity()));
 	}
 
-	private Field resolve(String key, Map<String, CustomField> cfs) {
+	private Field resolve(String key, Map<String, CustomField> cfs, Viewer viewer) {
 		if (key.startsWith("sys:")) {
 			return SYSTEM_BY_KEY.get(key);
 		}
 		if (key.startsWith("cf:")) {
 			CustomField cf = cfs.get(key.substring(3));
-			return cf == null ? null : toField(cf, null, true);
+			return cf == null ? null : toField(cf, null, true, viewer);
 		}
 		return null;
 	}
 
-	private Field toField(CustomField cf, String source, boolean defaultVisible) {
+	/** 현재 사용자와 그 사람이 이 프로젝트 ADMIN 인지 (canEdit 계산용). 멤버가 아니면 null */
+	private record Viewer(String userId, boolean projectAdmin) {}
+
+	private Viewer viewer(String projectId) {
+		if (SecurityContextHolder.getContext().getAuthentication() == null) {
+			return null;
+		}
+		String userId = currentUserId();
+		return memberAccess.findByProjectIdAndUserId(projectId, userId)
+			.filter(m -> UseStatCd.Usable.equals(m.getUseStatCd()))
+			.map(m -> new Viewer(userId, "ADMIN".equals(m.getRole())))
+			.orElse(null);
+	}
+
+	private static boolean canEdit(CustomField cf, Viewer v) {
+		return cf.projectId() != null && v != null && (v.projectAdmin() || (cf.createdBy() != null && cf.createdBy().equals(v.userId())));
+	}
+
+	/** 프로젝트 필드 수정·삭제: 만든 사람 또는 프로젝트 ADMIN (CREATED_BY 가 없는 옛 필드는 ADMIN 만) */
+	private void requireEditor(String projectId, CustomField cf) {
+		requireMember(projectId);
+		if (!canEdit(cf, viewer(projectId))) {
+			throw new AccessDeniedException("만든 사람이나 프로젝트 관리자만 바꿀 수 있습니다");
+		}
+	}
+
+	private Field toField(CustomField cf, String source, boolean defaultVisible, Viewer viewer) {
 		List<String> options = cf.optionsJson() == null ? null : readKeys(cf.optionsJson());
+		String scope = cf.projectId() != null ? "project" : cf.projectTypeId() != null ? "type" : "global";
+		CustomField src = cf.sourceFieldId() == null ? null : access.customField(tenant(), cf.sourceFieldId());
 		return new Field("cf:" + cf.id(), cf.fieldNm(), "cf", cf.fieldType(), options, cf.required(), false, source,
-			defaultVisible, cf.projectId());
+			defaultVisible, cf.projectId(), scope, cf.sourceFieldId(), src == null ? null : src.fieldNm(), cf.createdBy(),
+			canEdit(cf, viewer));
 	}
 
 	private static Field withSource(Field f, String source, boolean defaultVisible) {
 		return new Field(f.fieldKey(), f.name(), f.kind(), f.fieldType(), f.options(), f.required(), f.sortable(), source,
-			defaultVisible, f.projectId());
+			defaultVisible, f.projectId(), f.scope(), f.sourceFieldId(), f.sourceName(), f.createdBy(), f.canEdit());
+	}
+
+	private static String id(Field f) {
+		return f.fieldKey().substring(3);
 	}
 
 	private static List<String> withAlwaysShown(List<String> keys) {

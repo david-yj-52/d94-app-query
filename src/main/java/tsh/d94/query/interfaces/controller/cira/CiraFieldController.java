@@ -17,6 +17,8 @@ import tsh.d94.app.server.apService.cira.CiraFieldService;
 import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.Catalog;
 import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.Field;
 import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.FieldKeys;
+import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.ImportField;
+import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.LibraryItem;
 import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.ProjectType;
 import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.SaveCustomField;
 import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.SaveType;
@@ -68,6 +70,32 @@ public class CiraFieldController {
 	}
 
 	@PreAuthorize("hasRole('ADMIN')")
+	@PostMapping("/cira/project-types/{id}/custom-fields")
+	public ApiResponse<Field> createTypeField(@PathVariable String id, @RequestBody SaveCustomField req) {
+		return ApiResponse.ok(service.createTypeField(id, req));
+	}
+
+	@PreAuthorize("hasRole('ADMIN')")
+	@PutMapping("/cira/project-types/{id}/custom-fields/{cfId}")
+	public ApiResponse<Field> updateTypeField(@PathVariable String id, @PathVariable String cfId, @RequestBody SaveCustomField req) {
+		return ApiResponse.ok(service.updateTypeField(id, cfId, req));
+	}
+
+	@PreAuthorize("hasRole('ADMIN')")
+	@DeleteMapping("/cira/project-types/{id}/custom-fields/{cfId}")
+	public ApiResponse<Void> deleteTypeField(@PathVariable String id, @PathVariable String cfId) {
+		service.deleteTypeField(id, cfId);
+		return ApiResponse.noContent();
+	}
+
+	/** 전역 필드를 타입 필드로 복사 */
+	@PreAuthorize("hasRole('ADMIN')")
+	@PostMapping("/cira/project-types/{id}/custom-fields/import")
+	public ApiResponse<Field> importToType(@PathVariable String id, @RequestBody ImportField req) {
+		return ApiResponse.ok(service.importToType(id, req.sourceFieldId()));
+	}
+
+	@PreAuthorize("hasRole('ADMIN')")
 	@PostMapping("/cira/custom-fields")
 	public ApiResponse<Field> createGlobalField(@RequestBody SaveCustomField req) {
 		return ApiResponse.ok(service.createGlobalField(req));
@@ -99,6 +127,18 @@ public class CiraFieldController {
 	@PutMapping("/projects/{projectId}/fields")
 	public ApiResponse<List<Field>> replaceProjectFields(@PathVariable String projectId, @RequestBody FieldKeys req) {
 		return ApiResponse.ok(service.replaceProjectFields(projectId, req.fieldKeys() == null ? List.of() : req.fieldKeys()));
+	}
+
+	/** 가져올 수 있는 전역·타입 필드 (프로젝트 멤버) */
+	@GetMapping("/projects/{projectId}/field-library")
+	public ApiResponse<List<LibraryItem>> library(@PathVariable String projectId) {
+		return ApiResponse.ok(service.library(projectId));
+	}
+
+	/** 라이브러리 필드를 프로젝트 필드로 복사 (프로젝트 멤버) */
+	@PostMapping("/projects/{projectId}/custom-fields/import")
+	public ApiResponse<Field> importToProject(@PathVariable String projectId, @RequestBody ImportField req) {
+		return ApiResponse.ok(service.importToProject(projectId, req.sourceFieldId()));
 	}
 
 	@PostMapping("/projects/{projectId}/custom-fields")

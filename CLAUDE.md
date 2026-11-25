@@ -199,7 +199,9 @@ sequenceDiagram
 
 - 프로젝트는 `PROJECT_TYPE_ID` 로 타입을 참조한다. `PROJECT_TYPE` 문자열은 이름 사본(타입 이름 변경 시 함께 갱신). 기준정보 키 `cira.project.types` 는 없어졌다.
 - 새 프로젝트는 타입과 상관없이 칸반 보드 하나로 시작한다. Task 기본 세부 유형은 `Issue`(V590 에서 `Task` 이름 변경).
-- 테스트: `CiraFieldIT`.
+- 사용자 정의 필드 소속(V600): 전역(`PROJECT_ID`·`PROJECT_TYPE_ID` null) · 타입(`PROJECT_TYPE_ID`) · 프로젝트(`PROJECT_ID`). 전역·타입 필드는 라이브러리이고, 가져가면 **복사본**(`SOURCE_FIELD_ID`=원본, FK 없음)이 생겨 원본 수정·삭제와 무관하다. 타입 세트에는 `sys:` 와 그 타입의 타입 필드만.
+- 프로젝트 필드 생성·가져오기(`/projects/{id}/custom-fields[/import]`, `/field-library`)는 프로젝트 멤버, 수정·삭제는 `CREATED_BY` 본인 또는 프로젝트 ADMIN.
+- 테스트: `CiraFieldIT`, `CiraFieldLibraryMigrationIT`(V600 참조 → 복사 이관).
 
 ### PDF 학습 뷰어 (study)
 
