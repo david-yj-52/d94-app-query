@@ -96,6 +96,8 @@ class IssueServiceTest {
 	private NotificationService notificationService;
 	@Mock
 	private ApplicationEventPublisher eventPublisher;
+	@Mock
+	private CiraFieldService fieldService;
 	@InjectMocks
 	private IssueService issueService;
 
@@ -178,7 +180,7 @@ class IssueServiceTest {
 			tsh.d94.app.server.data.orm.cira.ciraCiraIssueType.SnCiraCiraIssueTypeModel task =
 				new tsh.d94.app.server.data.orm.cira.ciraCiraIssueType.SnCiraCiraIssueTypeModel();
 			org.springframework.test.util.ReflectionTestUtils.setField(task, "objId", "type-task");
-			given(issueTypeAccess.findByTypeNm("Task")).willReturn(Optional.of(task));
+			given(issueTypeAccess.findByTypeNm("Issue")).willReturn(Optional.of(task));
 		}
 
 		@Test

@@ -54,7 +54,7 @@ class IssueServiceIT {
 		project = fixtures.project("SCRUM");
 		fixtures.member(project.getId(), assignee);
 		todoStatusId = fixtures.statusId(project.getId(), "To Do");
-		taskTypeId = fixtures.issueType("Task");
+		taskTypeId = fixtures.issueType("Issue");
 	}
 
 	@AfterEach
@@ -95,7 +95,7 @@ class IssueServiceIT {
 		assertThat(res.getIssueKey()).isEqualTo(project.getKey() + "-1");
 		assertThat(res.getAssignee().getEmail()).isEqualTo(assignee.getEmail());
 		assertThat(res.getStatusNm()).isEqualTo("To Do");
-		assertThat(res.getIssueTypeNm()).isEqualTo("Task");
+		assertThat(res.getIssueTypeNm()).isEqualTo("Issue");
 
 		Map<String, Object> row = jdbc.queryForMap(
 			"select issue_key, assignee_id, reporter_id, status_id, tenant from sn_cira_issue where obj_id = ?",
@@ -187,7 +187,7 @@ class IssueServiceIT {
 	void issueTypes_seededAndListed() {
 		assertThat(issueService.getIssueTypes())
 			.extracting(tsh.d94.app.server.apService.cira.dto.IssueTypeResponse::getTypeNm)
-			.contains("Bug", "Epic", "Story", "Task");
+			.contains("Bug", "Epic", "Issue", "Story");
 	}
 
 	@Test

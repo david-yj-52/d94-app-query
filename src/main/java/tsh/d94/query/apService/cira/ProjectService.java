@@ -50,6 +50,7 @@ public class ProjectService {
 	private final SnCiraIssueTransitionAccess issueTransitionAccess;
 	private final SnCiraBoardAccess boardAccess;
 	private final SnCiraBoardColumnAccess boardColumnAccess;
+	private final CiraFieldService fieldService;
 
 	@Transactional
 	public ProjectResponse createProject(CreateProjectRequest request) {
@@ -61,11 +62,13 @@ public class ProjectService {
 			throw new IllegalArgumentException("Project key already exists: " + request.getKey());
 		}
 
+		var type = fieldService.resolveProjectType(request.getProjectTypeId(), request.getProjectType());
 		SnCiraProjectModel project = SnCiraProjectModel.builder()
 			.projectKey(request.getKey())
 			.projectNm(request.getName())
 			.descr(request.getDescription())
-			.projectType(request.getProjectType())
+			.projectType(type.typeNm())
+			.projectTypeId(type.id())
 			.ownerId(owner.getObjId())
 			.issueSequence(0)
 			.srvId(ApplicationProperties.getApplicationServiceName())
@@ -93,12 +96,13 @@ public class ProjectService {
 
 		projectMemberAccess.save(member);
 
-		initDefaultWorkflow(project.getObjId(), request.getProjectType());
+		initDefaultWorkflow(project.getObjId());
 
 		return mapToResponse(project);
 	}
 
-	private void initDefaultWorkflow(String projectId, String projectType) {
+	/** 새 프로젝트는 타입과 상관없이 칸반 보드 하나로 시작한다 (설계 5.4, 타입별 View 는 3단계) */
+	private void initDefaultWorkflow(String projectId) {
 		SnCiraIssueStatusModel todo = createStatus(projectId, "To Do", "TODO", "#DFE1E6", (short)1);
 		SnCiraIssueStatusModel inProgress = createStatus(projectId, "In Progress", "IN_PROGRESS", "#0052CC", (short)2);
 		SnCiraIssueStatusModel inReview = createStatus(projectId, "In Review", "IN_PROGRESS", "#FF991F", (short)3);
@@ -114,7 +118,7 @@ public class ProjectService {
 		SnCiraBoardModel board = SnCiraBoardModel.builder()
 			.projectId(projectId)
 			.boardNm("Default Board")
-			.boardType("SCRUM".equalsIgnoreCase(projectType) ? "SCRUM" : "KANBAN")
+			.boardType("KANBAN")
 			.srvId(ApplicationProperties.getApplicationServiceName())
 			.tenant(TenantContext.get())
 			.traceId("INIT-PROJ")
@@ -221,8 +225,10 @@ public class ProjectService {
 		if (request.getDescription() != null) {
 			project.setDescr(request.getDescription());
 		}
-		if (request.getProjectType() != null) {
-			project.setProjectType(request.getProjectType());
+		if (request.getProjectTypeId() != null || request.getProjectType() != null) {
+			var type = fieldService.resolveProjectType(request.getProjectTypeId(), request.getProjectType());
+			project.setProjectTypeId(type.id());
+			project.setProjectType(type.typeNm());
 		}
 		project.setEvtNm("UpdateProject");
 		projectAccess.save(project);
@@ -490,6 +496,8 @@ public class ProjectService {
 			.name(model.getProjectNm())
 			.description(model.getDescr())
 			.projectType(model.getProjectType())
+			.projectTypeId(model.getProjectTypeId())
+			.projectTypeNm(model.getProjectType())
 			.ownerId(model.getOwnerId())
 			.issueSequence(model.getIssueSequence())
 			.build();

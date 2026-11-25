@@ -86,7 +86,7 @@ public class CiraFixtures {
 			.build()).getObjId();
 	}
 
-	/** 상태 "To Do"·유형 "Task" 로 이슈 생성 (D3 를 피하는 정상 경로). 현재 로그인 사용자가 프로젝트 멤버여야 한다 */
+	/** 상태 "To Do"·유형 "Issue" 로 이슈 생성 (D3 를 피하는 정상 경로). 현재 로그인 사용자가 프로젝트 멤버여야 한다 */
 	public tsh.d94.app.server.apService.cira.dto.IssueResponse issue(String projectId, String title, String assigneeId) {
 		tsh.d94.app.server.apService.cira.dto.CreateIssueRequest req =
 			new tsh.d94.app.server.apService.cira.dto.CreateIssueRequest();
@@ -94,7 +94,7 @@ public class CiraFixtures {
 		req.setContent(title + " 설명");
 		req.setPriority("MEDIUM");
 		req.setStatusId(statusId(projectId, "To Do"));
-		req.setIssueTypeId(issueType("Task"));
+		req.setIssueTypeId(issueType("Issue"));
 		req.setAssigneeId(assigneeId);
 		return issueService.createIssue(projectId, req);
 	}

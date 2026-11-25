@@ -119,6 +119,41 @@ public class AyaanInternalController {
 		return ApiResponse.ok(svc.updateRun(runId, body));
 	}
 
+	@PostMapping("/plans")
+	public ResponseEntity<ApiResponse<PlanDto>> createPlan(@RequestBody PlanDto body) {
+		return ResponseEntity.status(201).body(ApiResponse.created(svc.createPlan(body)));
+	}
+
+	@GetMapping("/plans")
+	public ApiResponse<List<PlanDto>> plans(@RequestParam(required = false) String projectKey, @RequestParam(required = false) Boolean active) {
+		return ApiResponse.ok(svc.listPlans(projectKey, active));
+	}
+
+	@GetMapping("/plans/{id}")
+	public ApiResponse<PlanDto> plan(@PathVariable String id) {
+		return ApiResponse.ok(svc.getPlan(id));
+	}
+
+	@PostMapping("/plans/{id}/stage")
+	public ApiResponse<PlanDto> planStage(@PathVariable String id, @RequestBody PlanStageReq body) {
+		return ApiResponse.ok(svc.changePlanStage(id, body));
+	}
+
+	@GetMapping("/projects/{projectKey}/milestones")
+	public ApiResponse<List<MilestoneDto>> milestones(@PathVariable String projectKey) {
+		return ApiResponse.ok(svc.milestones(projectKey));
+	}
+
+	@GetMapping("/milestones/{id}/issues")
+	public ApiResponse<List<MilestoneIssueDto>> milestoneIssues(@PathVariable String id) {
+		return ApiResponse.ok(svc.milestoneIssues(id));
+	}
+
+	@PostMapping("/issues/by-key/{issueKey}/done")
+	public ApiResponse<Map<String, Boolean>> issueDone(@PathVariable String issueKey) {
+		return ApiResponse.ok(Map.of("changed", svc.markIssueDone(issueKey)));
+	}
+
 	@GetMapping("/issues/by-key/{issueKey}")
 	public ApiResponse<IssueDto> issueByKey(@PathVariable String issueKey) {
 		return ApiResponse.ok(svc.issueByKey(issueKey));

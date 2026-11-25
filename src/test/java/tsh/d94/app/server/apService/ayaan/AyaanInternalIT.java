@@ -24,7 +24,10 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import tsh.d94.app.server.apService.cira.IssueService;
+import tsh.d94.app.server.apService.cira.MilestoneService;
 import tsh.d94.app.server.apService.cira.dto.IssueResponse;
+import tsh.d94.app.server.apService.cira.dto.milestone.MilestoneRequest;
 import tsh.d94.app.server.apService.cira.dto.ProjectResponse;
 import tsh.d94.app.server.support.CiraFixtures;
 import tsh.d94.app.server.support.IntegrationTest;
@@ -42,6 +45,7 @@ class AyaanInternalIT {
 	@Autowired ObjectMapper om;
 	@Autowired JdbcTemplate jdbc;
 	@Autowired CiraFixtures fixtures;
+	@Autowired MilestoneService milestoneService;
 
 	private static String uniq() {
 		return UUID.randomUUID().toString().replace("-", "").substring(0, 12);
@@ -268,4 +272,174 @@ class AyaanInternalIT {
 		mvc.perform(auth(put(BASE + "/workspaces/" + pk), "{\"workspacePath\":\"/ws/a\",\"promptTemplate\":null}")).andExpect(status().isOk());
 		assertThat(jdbc.queryForObject("SELECT PROMPT_TEMPLATE FROM SN_AYN_WORKSPACE WHERE PROJECT_KEY=?", String.class, pk)).isNull();
 	}
+
+	// ── plan pipeline ──────────────────────────────────────────────────────
+
+	private JsonNode data(org.springframework.test.web.servlet.ResultActions r) throws Exception {
+		return om.readTree(r.andReturn().getResponse().getContentAsString()).get("data");
+	}
+
+	private String createPlan(String pk, int expectStatus) throws Exception {
+		var r = mvc.perform(auth(post(BASE + "/plans"), "{\"projectKey\":\"" + pk + "\",\"milestoneId\":\"m1\",\"milestoneKey\":\"M-1\"}"))
+			.andExpect(status().is(expectStatus));
+		return data(r).path("id").asText();
+	}
+
+	private void stage(String id, String expected, String next, int expectStatus) throws Exception {
+		mvc.perform(auth(post(BASE + "/plans/" + id + "/stage"), "{\"expectedStage\":\"" + expected + "\",\"nextStage\":\"" + next + "\"}"))
+			.andExpect(status().is(expectStatus));
+	}
+
+	@Test
+	void putWorkspace_replacesRepos_inSortOrder() throws Exception {
+		String pk = "R" + uniq();
+		String two = "{\"workspacePath\":\"/ws/a\",\"repos\":["
+			+ "{\"repoNm\":\"web\",\"gitUrl\":\"git@x:web.git\",\"sortOrd\":2},"
+			+ "{\"repoNm\":\"api\",\"gitUrl\":\"git@x:api.git\",\"baseBranch\":\"develop\",\"deployBranch\":\"prod\",\"sortOrd\":1}]}";
+		mvc.perform(auth(put(BASE + "/workspaces/" + pk), two)).andExpect(status().isOk());
+		JsonNode repos = null;
+		for (JsonNode w : data(mvc.perform(auth(get(BASE + "/workspaces"), null)))) if (pk.equals(w.get("projectKey").asText())) repos = w.get("repos");
+		assertThat(repos).hasSize(2);
+		assertThat(repos.get(0).get("repoNm").asText()).isEqualTo("api");
+		assertThat(repos.get(0).get("baseBranch").asText()).isEqualTo("develop");
+		assertThat(repos.get(1).get("baseBranch").asText()).isEqualTo("main");
+		// 같은 PK(api) 를 다시 넣어도 통째로 교체된다
+		mvc.perform(auth(put(BASE + "/workspaces/" + pk), "{\"workspacePath\":\"/ws/a\",\"repos\":[{\"repoNm\":\"api\",\"gitUrl\":\"git@x:api2.git\"}]}"))
+			.andExpect(status().isOk()).andExpect(jsonPath("$.data.repos.length()").value(1))
+			.andExpect(jsonPath("$.data.repos[0].gitUrl").value("git@x:api2.git"));
+		mvc.perform(auth(delete(BASE + "/workspaces/" + pk), null)).andExpect(status().isOk());
+	}
+
+	@Test
+	void createPlan_secondActiveInSameProject_409() throws Exception {
+		String pk = "P" + uniq();
+		createPlan(pk, 201);
+		mvc.perform(auth(post(BASE + "/plans"), "{\"projectKey\":\"" + pk + "\",\"milestoneId\":\"m2\"}"))
+			.andExpect(status().isConflict()).andExpect(jsonPath("$.data.stage").value("PREPARING"));
+	}
+
+	@Test
+	void createPlan_afterDone_allowed() throws Exception {
+		String pk = "P" + uniq();
+		String id = createPlan(pk, 201);
+		stage(id, "PREPARING", "DONE", 200);
+		createPlan(pk, 201);
+		mvc.perform(auth(get(BASE + "/plans?projectKey=" + pk + "&active=true"), null))
+			.andExpect(jsonPath("$.data.length()").value(1)).andExpect(jsonPath("$.data[0].stage").value("PREPARING"));
+		mvc.perform(auth(get(BASE + "/plans?projectKey=" + pk), null)).andExpect(jsonPath("$.data.length()").value(2));
+	}
+
+	@Test
+	void stage_wrongExpected_409() throws Exception {
+		String id = createPlan("P" + uniq(), 201);
+		stage(id, "RUNNING", "DONE", 409);
+		mvc.perform(auth(get(BASE + "/plans/" + id), null)).andExpect(jsonPath("$.data.stage").value("PREPARING"));
+		mvc.perform(auth(post(BASE + "/plans/" + id + "/stage"),
+			"{\"expectedStage\":\"PREPARING\",\"nextStage\":\"RUNNING\",\"currentIssueKey\":\"X-1\"}"))
+			.andExpect(status().isOk()).andExpect(jsonPath("$.data.stage").value("RUNNING"))
+			.andExpect(jsonPath("$.data.currentIssueKey").value("X-1"));
+	}
+
+	@Test
+	void stage_clearsLastErrorOnResume_andSetsEndedAtOnTerminal() throws Exception {
+		String id = createPlan("P" + uniq(), 201);
+		mvc.perform(auth(post(BASE + "/plans/" + id + "/stage"),
+			"{\"expectedStage\":\"PREPARING\",\"nextStage\":\"HALTED\",\"lastError\":\"boom\"}"))
+			.andExpect(jsonPath("$.data.lastError").value("boom")).andExpect(jsonPath("$.data.endedAt").doesNotExist());
+		mvc.perform(auth(post(BASE + "/plans/" + id + "/stage"), "{\"expectedStage\":\"HALTED\",\"nextStage\":\"RUNNING\"}"))
+			.andExpect(status().isOk()).andExpect(jsonPath("$.data.lastError").doesNotExist());
+		mvc.perform(auth(post(BASE + "/plans/" + id + "/stage"), "{\"expectedStage\":\"RUNNING\",\"nextStage\":\"DONE\"}"))
+			.andExpect(status().isOk()).andExpect(jsonPath("$.data.endedAt").exists());
+	}
+
+	@Test
+	void stage_unknownIs400_andLeavingTerminalIs409() throws Exception {
+		String pk = "P" + uniq();
+		String id = createPlan(pk, 201);
+		stage(id, "PREPARING", "BOGUS", 400);
+		stage(id, "PREPARING", "A_VERY_LONG_STAGE_NAME_OVER_20", 400);
+		stage(id, "NOPE", "RUNNING", 400);
+		stage(id, "PREPARING", "CANCELLED", 200);
+		stage(id, "CANCELLED", "RUNNING", 409);
+		String id2 = createPlan(pk, 201); // 새 활성 계획이 생긴 뒤에도 옛 계획 부활은 409 (유니크 인덱스 500 아님)
+		stage(id, "CANCELLED", "RUNNING", 409);
+		mvc.perform(auth(get(BASE + "/plans/" + id2), null)).andExpect(jsonPath("$.data.stage").value("PREPARING"));
+		mvc.perform(auth(get(BASE + "/plans"), null)).andExpect(status().isOk());
+	}
+
+	@Test
+	void issueDone_noDoneTransitionOrNoReporter_changedFalse() throws Exception {
+		String email = CiraFixtures.uniqueEmail("ayaan");
+		TestContexts.login(email);
+		try {
+			fixtures.user(email);
+			ProjectResponse p = fixtures.project("SCRUM");
+			IssueResponse i = fixtures.issue(p.getId(), "twice", null);
+			String url = BASE + "/issues/by-key/" + i.getIssueKey() + "/done";
+			mvc.perform(auth(post(url), null)).andExpect(jsonPath("$.data.changed").value(true));
+			mvc.perform(auth(post(url), null)).andExpect(status().isOk()).andExpect(jsonPath("$.data.changed").value(false));
+			TestContexts.login(email); // MockMvc 요청이 끝나면 보안 컨텍스트가 비워진다
+			IssueResponse j = fixtures.issue(p.getId(), "orphan", null);
+			jdbc.update("UPDATE SN_CIRA_ISSUE SET REPORTER_ID = 'missing' WHERE ISSUE_KEY = ?", j.getIssueKey());
+			mvc.perform(auth(post(BASE + "/issues/by-key/" + j.getIssueKey() + "/done"), null))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.data.changed").value(false));
+		} finally {
+			TestContexts.clear();
+		}
+	}
+
+	@Test
+	void milestoneIssues_orderedByNumber() throws Exception {
+		String email = CiraFixtures.uniqueEmail("ayaan");
+		TestContexts.login(email);
+		try {
+			fixtures.user(email);
+			ProjectResponse p = fixtures.project("SCRUM");
+			var ms = milestoneService.createMilestone(p.getId(), MilestoneRequest.builder().name("m").build());
+			IssueResponse i2 = null, i10 = null;
+			for (int n = 1; n <= 10; n++) {
+				IssueResponse i = fixtures.issue(p.getId(), "i" + n, null);
+				if (n == 2) i2 = i;
+				if (n == 10) i10 = i;
+			}
+			milestoneService.addIssueToMilestone(ms.getId(), i10.getId());
+			milestoneService.addIssueToMilestone(ms.getId(), i2.getId());
+			mvc.perform(auth(get(BASE + "/milestones/" + ms.getId() + "/issues"), null)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()").value(2))
+				.andExpect(jsonPath("$.data[0].issueNo").value(2)).andExpect(jsonPath("$.data[1].issueNo").value(10))
+				.andExpect(jsonPath("$.data[0].issueKey").value(i2.getIssueKey()))
+				.andExpect(jsonPath("$.data[0].issueTypeNm").value("Issue"))
+				.andExpect(jsonPath("$.data[0].statusCategory").value("TODO"));
+			mvc.perform(auth(get(BASE + "/projects/" + p.getKey() + "/milestones"), null)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].id").value(ms.getId())).andExpect(jsonPath("$.data[0].name").value("m"));
+		} finally {
+			TestContexts.clear();
+		}
+	}
+
+	@Test
+	void issueDone_movesToDoneCategory() throws Exception {
+		String email = CiraFixtures.uniqueEmail("ayaan");
+		TestContexts.login(email);
+		try {
+			fixtures.user(email);
+			ProjectResponse p = fixtures.project("SCRUM");
+			IssueResponse i = fixtures.issue(p.getId(), "done me", null);
+			mvc.perform(auth(post(BASE + "/issues/by-key/" + i.getIssueKey() + "/done"), null)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.changed").value(true));
+			assertThat(jdbc.queryForObject("SELECT s.CATEGORY FROM SN_CIRA_ISSUE i JOIN SN_CIRA_ISSUE_STATUS s ON s.OBJ_ID = i.STATUS_ID WHERE i.ISSUE_KEY = ?",
+				String.class, i.getIssueKey())).isEqualTo("DONE");
+		} finally {
+			TestContexts.clear();
+		}
+	}
+
+	@Test
+	void createTask_keepsPlanId() throws Exception {
+		String body = "{\"source\":\"API\",\"projectKey\":\"PL\",\"workspacePath\":\"/ws/x\",\"prompt\":\"p\",\"toolCd\":\"" + uniq()
+			+ "\",\"status\":\"QUEUED\",\"planId\":\"plan-123\"}";
+		String id = data(mvc.perform(auth(post(BASE + "/tasks"), body)).andExpect(status().isCreated())).get("id").asText();
+		mvc.perform(auth(get(BASE + "/tasks/" + id), null)).andExpect(jsonPath("$.data.planId").value("plan-123"));
+	}
+
 }
