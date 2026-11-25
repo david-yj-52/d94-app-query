@@ -54,7 +54,7 @@ import tsh.d94.lib.core.data.orm.usersAndPermissions.gsUser.GsUserAccess;
 @RequiredArgsConstructor
 public class CiraFieldService {
 
-	/** 기본 필드 카탈로그 (설계 5.1). d94-web src/types/fields.ts SYSTEM_FIELDS 와 같아야 한다 */
+	/** 기본 필드 카탈로그 (설계 5.1). d94-web src/lib/mock/fields.ts SYSTEM 과 같게 둔다 (웹 화면은 API 로 받음) */
 	static final List<Field> SYSTEM = List.of(
 		sys("sys:type", "유형", "SELECT"), sys("sys:key", "키", "TEXT"), sys("sys:summary", "요약", "TEXT"),
 		sys("sys:status", "상태", "SELECT"), sys("sys:priority", "우선순위", "SELECT"), sys("sys:assignee", "담당자", "USER"),

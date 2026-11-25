@@ -190,7 +190,7 @@ sequenceDiagram
 
 | 클래스 | 역할 |
 |---|---|
-| `apService/cira/CiraFieldService` | 기본 필드 카탈로그(`sys:*`, d94-web `src/types/fields.ts` 와 짝), 프로젝트 타입·타입별 필드 세트, 사용자 정의 필드(`cf:<id>`, 전역·프로젝트), 유효 필드(고정 → 타입 세트 → 프로젝트 추가), 사람별 목록 컬럼(`KNOWN_KEYS` 로 새 필드 감지), Task 값 검증·저장 |
+| `apService/cira/CiraFieldService` | 기본 필드 카탈로그(`sys:*`, d94-web mock `src/lib/mock/fields.ts` 와 짝), 프로젝트 타입·타입별 필드 세트, 사용자 정의 필드(`cf:<id>`, 전역·프로젝트), 유효 필드(고정 → 타입 세트 → 프로젝트 추가), 사람별 목록 컬럼(`KNOWN_KEYS` 로 새 필드 감지), Task 값 검증·저장 |
 | `apService/cira/IssueSort` | `sort=sys:<key>,asc` 를 보이는 값 기준으로 정렬, 빈 값은 항상 뒤 |
 | `data/orm/cira/ciraField/CiraFieldAccess` | 위 테이블들의 JdbcTemplate 저장소 (엔티티 없음) |
 | `interfaces/controller/cira/CiraFieldController` | `/api/v1/cira/{field-catalog,project-types,custom-fields}`(쓰기 ADMIN), `/api/v1/projects/{id}/{fields,custom-fields,column-pref}`(쓰기 프로젝트 ADMIN, 컬럼은 본인) |
