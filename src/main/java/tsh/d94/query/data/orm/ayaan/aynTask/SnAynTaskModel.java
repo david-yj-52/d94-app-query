@@ -76,4 +76,7 @@ public class SnAynTaskModel extends BaseModel {
 	@Column(name = "FINISHED_AT")
 	private LocalDateTime finishedAt;
 
+	@Column(name = "PLAN_ID", length = 100)
+	private String planId;
+
 }

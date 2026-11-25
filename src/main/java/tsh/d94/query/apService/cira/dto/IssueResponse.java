@@ -31,6 +31,11 @@ public class IssueResponse {
 	private String projectId;
 	private String sprintId;
 	private LocalDate dueDt;
+	private LocalDateTime startedAt;
+	private LocalDateTime resolvedAt;
+	/** {"cf:<id>": 값}. 값이 있는 필드만 */
+	@Builder.Default
+	private java.util.Map<String, Object> customFields = new java.util.HashMap<>();
 	private LocalDateTime createdAt;
 	private LocalDateTime modifiedAt;
 }

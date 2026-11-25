@@ -175,15 +175,31 @@ sequenceDiagram
 | 클래스 | 역할 |
 |---|---|
 | `config/ApiTokenSecurityConfig` | `@Order(2)` 체인. `Authorization: Bearer d94_…` 요청만 매칭. 필터는 `@Bean` 아님(서블릿 전역 자동 등록 방지). 성공 시 소유자 `D94UserDetails`·`TenantContext` 설정, 실패는 JSON `ApiResponse` 401/403 |
-| `apService/apiToken/ApiTokenScope` | 서비스별 허용 경로(context-path 제외). 지금은 `CIRA` 만. 목록 밖(`/api-tokens`·`/settings`·`/auth`·`/internal`·study 등)은 403 |
+| `apService/apiToken/ApiTokenScope` | 서비스별 허용 경로(context-path 제외): `CIRA`, `DOCS`(`/api/v1/docs`), `STUDY`(`/api/v1/study`), `INTERFACE_TEST`(`/api/v1/interface-tests`), 전역 `ALL`(위 서비스 전체 — 서비스를 추가하면 자동 포함). 목록 밖(`/api-tokens`·`/settings`·`/auth`·`/internal`·`/api/mdm` 등)은 전역 토큰도 403 |
 | `apService/apiToken/ApiTokenService` | 발급(원문 1회, `SHA-256` hex 저장, 이름 1~100자, READ/WRITE, 30·90·365일, 사용자당 사용 중 20개), 조회, 폐기(`REVOKED_AT`), 서비스 on/off(`SN_SETTING` `api-token.{service}.enabled`, 없으면 허용), 요청 인증 |
 | `interfaces/controller/apiToken/ApiTokenController` | `GET·POST /api/v1/api-tokens`, `DELETE /{id}`(204, 남의 것 404), `GET /services`, `PUT /services/{service}` `{enabled}`(ADMIN) |
 
 - 토큰 형식 `d94_{service}_{base64url 32바이트}`. 토큰은 **발급 사용자로 동작**하므로 CIRA 권한 검사를 그대로 받는다(조회 권한이 열린 결함 [D18] 도 그대로).
 - 401: 없음·불일치·만료·폐기·소유자 `USE_STAT_CD≠Usable`. 403: 서비스 꺼짐·범위 밖·READ 토큰으로 GET/HEAD 외.
+- 전역 토큰(`d94_all_…`)은 `api-token.all.enabled` 와 **호출하는 서비스의** `api-token.{service}.enabled` 가 둘 다 켜져 있어야 통과(서비스 차단을 전역 토큰으로 우회 못 함). Ayaan 은 별도 앱(자체 JWT)이라 대상 아님.
 - `LAST_USED_AT` 은 1분에 한 번만 갱신. 로그에는 토큰 원문 대신 `d94_{service}_…` 만.
 - MCP 는 UMD 를 거치지 않고 게이트웨이(`/tsh/**`)로 바로 호출(UMD 는 JWT 만 통과).
 - 테이블 `SN_API_TOKEN` (`V560`). 테스트: `ApiTokenScopeTest`, `ApiTokenIT`(실제 필터 체인).
+
+### CIRA 프로젝트 타입·필드·컬럼
+
+설계: d94-note `docs/superpowers/specs/2026-11-21-cira-task-columns-design.md` (테이블 `V590`)
+
+| 클래스 | 역할 |
+|---|---|
+| `apService/cira/CiraFieldService` | 기본 필드 카탈로그(`sys:*`, d94-web mock `src/lib/mock/fields.ts` 와 짝), 프로젝트 타입·타입별 필드 세트, 사용자 정의 필드(`cf:<id>`, 전역·프로젝트), 유효 필드(고정 → 타입 세트 → 프로젝트 추가), 사람별 목록 컬럼(`KNOWN_KEYS` 로 새 필드 감지), Task 값 검증·저장 |
+| `apService/cira/IssueSort` | `sort=sys:<key>,asc` 를 보이는 값 기준으로 정렬, 빈 값은 항상 뒤 |
+| `data/orm/cira/ciraField/CiraFieldAccess` | 위 테이블들의 JdbcTemplate 저장소 (엔티티 없음) |
+| `interfaces/controller/cira/CiraFieldController` | `/api/v1/cira/{field-catalog,project-types,custom-fields}`(쓰기 ADMIN), `/api/v1/projects/{id}/{fields,custom-fields,column-pref}`(쓰기 프로젝트 ADMIN, 컬럼은 본인) |
+
+- 프로젝트는 `PROJECT_TYPE_ID` 로 타입을 참조한다. `PROJECT_TYPE` 문자열은 이름 사본(타입 이름 변경 시 함께 갱신). 기준정보 키 `cira.project.types` 는 없어졌다.
+- 새 프로젝트는 타입과 상관없이 칸반 보드 하나로 시작한다. Task 기본 세부 유형은 `Issue`(V590 에서 `Task` 이름 변경).
+- 테스트: `CiraFieldIT`.
 
 ### PDF 학습 뷰어 (study)
 

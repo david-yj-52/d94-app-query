@@ -21,4 +21,6 @@ public class UpdateIssueRequest {
 	private String assigneeId;
 	private String sprintId;
 	private LocalDate dueDt;
+	/** {"cf:<id>": 값}. null·"" 은 값 삭제 (설계 5.4) */
+	private java.util.Map<String, Object> customFields;
 }

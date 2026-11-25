@@ -23,7 +23,7 @@ public class SnAynWorkspaceModel extends AynRefBase {
 	@Column(name = "PROJECT_KEY", length = 50)
 	private String projectKey;
 
-	@Column(name = "WORKSPACE_PATH", length = 500, nullable = false)
+	@Column(name = "WORKSPACE_PATH", length = 500)
 	private String workspacePath;
 
 	@Column(name = "DEFAULT_TOOL", length = 20, nullable = false)

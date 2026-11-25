@@ -101,23 +101,9 @@ class SettingServiceTest {
 	}
 
 	@Test
-	void update_saves_cira_project_types_trimmed_and_deduped() {
-		when(repo.findByTenantAndSettingKey("T", "cira.project.types")).thenReturn(Optional.empty());
-
-		service.update(Map.of("cira.project.types", "[\" 웹개발 \", \"모바일\", \"웹개발\"]"));
-
-		ArgumentCaptor<SnSettingModel> saved = ArgumentCaptor.forClass(SnSettingModel.class);
-		verify(repo).save(saved.capture());
-		assertThat(saved.getValue().getSettingValue()).isEqualTo("[\"웹개발\",\"모바일\"]");
-	}
-
-	@Test
-	void update_rejects_invalid_cira_project_types() {
-		assertThatThrownBy(() -> service.update(Map.of("cira.project.types", "not-json")))
-			.isInstanceOf(IllegalArgumentException.class);
-		assertThatThrownBy(() -> service.update(Map.of("cira.project.types", "[\"\"]")))
-			.isInstanceOf(IllegalArgumentException.class);
-		assertThatThrownBy(() -> service.update(Map.of("cira.project.types", "[\"" + "a".repeat(31) + "\"]")))
+	void update_rejects_removed_cira_project_types_key() {
+		// V590: 프로젝트 타입은 SN_CIRA_PROJECT_TYPE 으로 옮겨졌다
+		assertThatThrownBy(() -> service.update(Map.of("cira.project.types", "[\"웹개발\"]")))
 			.isInstanceOf(IllegalArgumentException.class);
 		verify(repo, never()).save(any());
 	}

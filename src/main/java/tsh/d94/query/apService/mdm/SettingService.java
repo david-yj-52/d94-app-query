@@ -1,14 +1,10 @@
 package tsh.d94.app.server.apService.mdm;
 
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,11 +23,7 @@ public class SettingService {
 
 	static final String LOGO_TEXT = "general.logo.text";
 	static final String LOGO_FONT = "general.logo.font";
-	static final String CIRA_PROJECT_TYPES = "cira.project.types";
 	static final int LOGO_TEXT_MAX = 30;
-	static final int CIRA_PROJECT_TYPE_MAX = 30;
-	static final int SETTING_VALUE_MAX = 500;
-	private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 	// d94-web src/components/layout/logoFonts.ts 의 LOGO_FONTS id 와 같아야 한다
 	static final Set<String> LOGO_FONTS = Set.of("default", "noto-sans-kr", "nanum-gothic", "black-han-sans", "do-hyeon");
 
@@ -92,43 +84,9 @@ public class SettingService {
 					throw new IllegalArgumentException("지원하지 않는 폰트입니다: " + v);
 				}
 			}
-			case CIRA_PROJECT_TYPES -> {
-				return validateProjectTypes(v);
-			}
 			default -> throw new IllegalArgumentException("알 수 없는 설정 키입니다: " + key);
 		}
 		return v;
-	}
-
-	private static String validateProjectTypes(String raw) {
-		if (raw.isEmpty()) {
-			return "[]";
-		}
-		List<String> parsed;
-		try {
-			parsed = OBJECT_MAPPER.readValue(raw, new TypeReference<>() {});
-		} catch (Exception e) {
-			throw new IllegalArgumentException("프로젝트 유형 목록은 JSON 문자열 배열이어야 합니다.");
-		}
-		Set<String> dedup = new LinkedHashSet<>();
-		for (String item : parsed) {
-			String trimmed = item == null ? "" : item.trim();
-			if (trimmed.isEmpty() || trimmed.length() > CIRA_PROJECT_TYPE_MAX) {
-				throw new IllegalArgumentException("프로젝트 유형은 1~" + CIRA_PROJECT_TYPE_MAX + "자여야 합니다.");
-			}
-			dedup.add(trimmed);
-		}
-		try {
-			String serialized = OBJECT_MAPPER.writeValueAsString(new ArrayList<>(dedup));
-			if (serialized.length() > SETTING_VALUE_MAX) {
-				throw new IllegalArgumentException("프로젝트 유형 목록이 너무 깁니다 (최대 " + SETTING_VALUE_MAX + "자).");
-			}
-			return serialized;
-		} catch (IllegalArgumentException e) {
-			throw e;
-		} catch (Exception e) {
-			throw new IllegalArgumentException("프로젝트 유형 직렬화에 실패했습니다.");
-		}
 	}
 
 	private static SnSettingModel newRow(String tenant, String key) {

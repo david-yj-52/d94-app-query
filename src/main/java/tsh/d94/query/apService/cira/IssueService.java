@@ -3,6 +3,7 @@ package tsh.d94.app.server.apService.cira;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -59,8 +60,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class IssueService {
 
-	/** 이슈 유형을 지정하지 않았을 때의 기본값 (Flyway V320 시드) */
-	private static final String DEFAULT_ISSUE_TYPE = "Task";
+	/** 이슈 유형을 지정하지 않았을 때의 기본값 (Flyway V320 시드, V590 에서 Task → Issue) */
+	private static final String DEFAULT_ISSUE_TYPE = "Issue";
 
 	private final SnCiraIssueAccess issueAccess;
 	private final SnCiraProjectAccess projectAccess;
@@ -75,6 +76,7 @@ public class IssueService {
 	private final SnCiraBoardAccess boardAccess;
 	private final NotificationService notificationService;
 	private final ApplicationEventPublisher eventPublisher;
+	private final CiraFieldService fieldService;
 
 	@Transactional
 	public IssueResponse createIssue(String projectId, CreateIssueRequest request) {
@@ -121,6 +123,7 @@ public class IssueService {
 			.build();
 
 		issueAccess.save(issue);
+		fieldService.applyValues(projectId, issue.getObjId(), request.getCustomFields(), true);
 
 		// 자동화 이벤트 발행: 이슈 생성
 		eventPublisher.publishEvent(new IssueCreatedEvent(this, issue.getObjId(), projectId, reporter.getObjId()));
@@ -150,7 +153,7 @@ public class IssueService {
 			issuePositionAccess.save(position);
 		}
 
-		return mapToResponse(issue);
+		return withValues(mapToResponse(issue));
 	}
 
 	public IssueResponse getIssue(String issueId) {
@@ -160,7 +163,7 @@ public class IssueService {
 			throw new EntityNotFoundException("Issue not found: " + issueId);
 		}
 
-		return mapToResponse(issue);
+		return withValues(mapToResponse(issue));
 	}
 
 	@Transactional
@@ -204,8 +207,12 @@ public class IssueService {
 				this, issueId, issue.getProjectId(), request.getAssigneeId(), user.getObjId()));
 		}
 
+		if (request.getCustomFields() != null) {
+			fieldService.applyValues(issue.getProjectId(), issueId, request.getCustomFields(), false);
+		}
+
 		issueAccess.save(issue);
-		return mapToResponse(issue);
+		return withValues(mapToResponse(issue));
 	}
 
 	@Transactional
@@ -318,10 +325,11 @@ public class IssueService {
 			cb.isNull(root.get("deletedAt")),
 			cb.isNull(root.get("sprintId"))
 		);
-		return issueAccess.findAll(spec, pageable).map(this::mapToResponse);
+		return withValues(issueAccess.findAll(spec, pageable).map(this::mapToResponse));
 	}
 
 	public Page<IssueResponse> listIssues(String projectId, IssueFilterRequest filter, Pageable pageable) {
+		IssueSort.validate(pageable.getSort());
 		Specification<SnCiraIssueModel> spec = (root, query, cb) -> {
 			List<Predicate> predicates = new ArrayList<>();
 			predicates.add(cb.equal(root.get("projectId"), projectId));
@@ -346,10 +354,26 @@ public class IssueService {
 				predicates.add(cb.like(cb.lower(root.get("title")), "%" + filter.getKeyword().toLowerCase() + "%"));
 			}
 
+			if (pageable.getSort().isSorted() && !Long.class.equals(query.getResultType())) {
+				query.orderBy(IssueSort.orders(root, query, cb, pageable.getSort()));
+			}
 			return cb.and(predicates.toArray(new Predicate[0]));
 		};
 
-		return issueAccess.findAll(spec, pageable).map(this::mapToResponse);
+		Pageable unsorted = org.springframework.data.domain.PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+		return withValues(issueAccess.findAll(spec, unsorted).map(this::mapToResponse));
+	}
+
+	/** 페이지의 사용자 정의 값을 한 번에 붙인다 (N+1 금지) */
+	private Page<IssueResponse> withValues(Page<IssueResponse> page) {
+		Map<String, Map<String, Object>> values = fieldService.values(page.getContent().stream().map(IssueResponse::getId).toList());
+		page.getContent().forEach(r -> r.setCustomFields(values.getOrDefault(r.getId(), new java.util.HashMap<>())));
+		return page;
+	}
+
+	private IssueResponse withValues(IssueResponse r) {
+		r.setCustomFields(fieldService.values(java.util.Collections.singletonList(r.getId())).getOrDefault(r.getId(), new java.util.HashMap<>()));
+		return r;
 	}
 
 	/** 선택 가능한 이슈 유형 (전역, 이름순) */
@@ -382,7 +406,7 @@ public class IssueService {
 		return statusId;
 	}
 
-	/** 유형 미지정 → 기본 유형 Task (Flyway V320 시드). 지정했으면 존재하는지 확인 */
+	/** 유형 미지정 → 기본 유형 Issue. 지정했으면 존재하는지 확인 */
 	private String resolveIssueTypeId(String issueTypeId) {
 		if (issueTypeId == null) {
 			return issueTypeAccess.findByTypeNm(DEFAULT_ISSUE_TYPE)
@@ -467,6 +491,8 @@ public class IssueService {
 			.projectId(model.getProjectId())
 			.sprintId(model.getSprintId())
 			.dueDt(model.getDueDt())
+			.startedAt(model.getStartedAt())
+			.resolvedAt(model.getResolvedAt())
 			.createdAt(model.getCreatedAt())
 			.modifiedAt(model.getModifiedAt())
 			.build();

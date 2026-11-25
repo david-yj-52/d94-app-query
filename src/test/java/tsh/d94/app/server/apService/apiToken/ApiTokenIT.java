@@ -143,6 +143,49 @@ class ApiTokenIT {
 	}
 
 	@Test
+	void docsTokenCallsDocsOnly() throws Exception {
+		String email = CiraFixtures.uniqueEmail("tokdocs");
+		ProjectResponse p = ownerWithProject(email);
+		IssueResponse docs = service.issue(T, email, new IssueRequest("docs", "it", "READ", null));
+
+		assertThat(docs.token()).startsWith("d94_docs_");
+		call(get("/api/v1/docs/folders"), docs.token()).andExpect(status().isOk());
+		call(get("/api/v1/projects/" + p.getId()), docs.token()).andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.code").value("API_TOKEN_SCOPE"));
+	}
+
+	@Test
+	void globalTokenCallsEveryServiceButNotAdminApis() throws Exception {
+		String email = CiraFixtures.uniqueEmail("tokall");
+		ProjectResponse p = ownerWithProject(email);
+		IssueResponse all = service.issue(T, email, new IssueRequest("all", "it", "READ", null));
+
+		assertThat(all.token()).startsWith("d94_all_");
+		call(get("/api/v1/projects/" + p.getId()), all.token()).andExpect(status().isOk());
+		call(get("/api/v1/docs/folders"), all.token()).andExpect(status().isOk());
+		call(get("/api/v1/interface-tests"), all.token()).andExpect(status().isOk());
+		call(get("/api/v1/api-tokens"), all.token()).andExpect(status().isForbidden());
+		call(get("/api/v1/settings"), all.token()).andExpect(status().isForbidden());
+
+		// 서비스를 끄면 전역 토큰도 그 서비스는 막히고 다른 서비스는 그대로
+		try {
+			service.setServiceEnabled(T, "cira", false);
+			call(get("/api/v1/projects/" + p.getId()), all.token()).andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.code").value("API_TOKEN_SERVICE_DISABLED"));
+			call(get("/api/v1/docs/folders"), all.token()).andExpect(status().isOk());
+		} finally {
+			service.setServiceEnabled(T, "cira", true);
+		}
+		// 전역 토큰 자체를 끄면 모든 호출이 막힌다
+		try {
+			service.setServiceEnabled(T, "all", false);
+			call(get("/api/v1/docs/folders"), all.token()).andExpect(status().isForbidden());
+		} finally {
+			service.setServiceEnabled(T, "all", true);
+		}
+	}
+
+	@Test
 	void listAndRevokeAreOwnerScoped() {
 		String a = CiraFixtures.uniqueEmail("la");
 		IssueResponse t = issue(a, "READ");
