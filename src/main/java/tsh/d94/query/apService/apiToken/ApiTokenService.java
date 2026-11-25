@@ -153,6 +153,11 @@ public class ApiTokenService {
 		if (!scope.allows(path)) {
 			return new Denied(403, "API_TOKEN_SCOPE", "이 토큰으로 호출할 수 없는 API 입니다.");
 		}
+		// 전역 토큰도 호출하는 서비스가 꺼져 있으면 막는다 (서비스별 차단이 전역 토큰으로 우회되지 않게)
+		ApiTokenScope target = ApiTokenScope.ownerOf(path);
+		if (target != scope && !serviceEnabled(token.getTenant(), target)) {
+			return new Denied(403, "API_TOKEN_SERVICE_DISABLED", "관리자가 이 서비스의 API 토큰 사용을 막았습니다.");
+		}
 		if (READ.equals(token.getAccessCd()) && !"GET".equals(method) && !"HEAD".equals(method)) {
 			return new Denied(403, "API_TOKEN_READ_ONLY", "읽기 전용 토큰입니다.");
 		}
