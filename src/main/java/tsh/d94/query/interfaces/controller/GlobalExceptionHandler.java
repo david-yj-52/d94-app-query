@@ -67,6 +67,13 @@ public class GlobalExceptionHandler {
 			.body(ApiResponse.<Object>builder().success(false).code("CONFLICT").message(e.getMessage()).data(e.getData()).build());
 	}
 
+	@ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+	public ResponseEntity<ApiResponse<Void>> handleResponseStatus(org.springframework.web.server.ResponseStatusException e) {
+		log.warn("{}: {}", e.getStatusCode(), e.getReason());
+		return ResponseEntity.status(e.getStatusCode())
+			.body(ApiResponse.error(HttpStatus.valueOf(e.getStatusCode().value()).name(), e.getReason()));
+	}
+
 	@ExceptionHandler(EntityNotFoundException.class)
 	public ResponseEntity<ApiResponse<Void>> handleNotFound(EntityNotFoundException e) {
 		log.warn("Not found: {}", e.getMessage());

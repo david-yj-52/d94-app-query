@@ -184,6 +184,21 @@ sequenceDiagram
 - MCP 는 UMD 를 거치지 않고 게이트웨이(`/tsh/**`)로 바로 호출(UMD 는 JWT 만 통과).
 - 테이블 `SN_API_TOKEN` (`V560`). 테스트: `ApiTokenScopeTest`, `ApiTokenIT`(실제 필터 체인).
 
+### CIRA 프로젝트 타입·필드·컬럼
+
+설계: d94-note `docs/superpowers/specs/2026-11-21-cira-task-columns-design.md` (테이블 `V590`)
+
+| 클래스 | 역할 |
+|---|---|
+| `apService/cira/CiraFieldService` | 기본 필드 카탈로그(`sys:*`, d94-web `src/types/fields.ts` 와 짝), 프로젝트 타입·타입별 필드 세트, 사용자 정의 필드(`cf:<id>`, 전역·프로젝트), 유효 필드(고정 → 타입 세트 → 프로젝트 추가), 사람별 목록 컬럼(`KNOWN_KEYS` 로 새 필드 감지), Task 값 검증·저장 |
+| `apService/cira/IssueSort` | `sort=sys:<key>,asc` 를 보이는 값 기준으로 정렬, 빈 값은 항상 뒤 |
+| `data/orm/cira/ciraField/CiraFieldAccess` | 위 테이블들의 JdbcTemplate 저장소 (엔티티 없음) |
+| `interfaces/controller/cira/CiraFieldController` | `/api/v1/cira/{field-catalog,project-types,custom-fields}`(쓰기 ADMIN), `/api/v1/projects/{id}/{fields,custom-fields,column-pref}`(쓰기 프로젝트 ADMIN, 컬럼은 본인) |
+
+- 프로젝트는 `PROJECT_TYPE_ID` 로 타입을 참조한다. `PROJECT_TYPE` 문자열은 이름 사본(타입 이름 변경 시 함께 갱신). 기준정보 키 `cira.project.types` 는 없어졌다.
+- 새 프로젝트는 타입과 상관없이 칸반 보드 하나로 시작한다. Task 기본 세부 유형은 `Issue`(V590 에서 `Task` 이름 변경).
+- 테스트: `CiraFieldIT`.
+
 ### PDF 학습 뷰어 (study)
 
 설계: d94-note `docs/superpowers/specs/2026-11-09-pdf-study-viewer-design.md`

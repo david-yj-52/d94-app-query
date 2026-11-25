@@ -14,7 +14,9 @@ public class ProjectResponse {
 	private String key;
 	private String name;
 	private String description;
-	private String projectType;
+	private String projectType; // 타입 이름 (= projectTypeNm, 옛 클라이언트용)
+	private String projectTypeId;
+	private String projectTypeNm;
 	private String ownerId;
 	private Integer issueSequence;
 }

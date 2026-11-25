@@ -408,7 +408,7 @@ class AyaanInternalIT {
 				.andExpect(jsonPath("$.data.length()").value(2))
 				.andExpect(jsonPath("$.data[0].issueNo").value(2)).andExpect(jsonPath("$.data[1].issueNo").value(10))
 				.andExpect(jsonPath("$.data[0].issueKey").value(i2.getIssueKey()))
-				.andExpect(jsonPath("$.data[0].issueTypeNm").value("Task"))
+				.andExpect(jsonPath("$.data[0].issueTypeNm").value("Issue"))
 				.andExpect(jsonPath("$.data[0].statusCategory").value("TODO"));
 			mvc.perform(auth(get(BASE + "/projects/" + p.getKey() + "/milestones"), null)).andExpect(status().isOk())
 				.andExpect(jsonPath("$.data[0].id").value(ms.getId())).andExpect(jsonPath("$.data[0].name").value("m"));
