@@ -175,12 +175,13 @@ sequenceDiagram
 | 클래스 | 역할 |
 |---|---|
 | `config/ApiTokenSecurityConfig` | `@Order(2)` 체인. `Authorization: Bearer d94_…` 요청만 매칭. 필터는 `@Bean` 아님(서블릿 전역 자동 등록 방지). 성공 시 소유자 `D94UserDetails`·`TenantContext` 설정, 실패는 JSON `ApiResponse` 401/403 |
-| `apService/apiToken/ApiTokenScope` | 서비스별 허용 경로(context-path 제외). 지금은 `CIRA` 만. 목록 밖(`/api-tokens`·`/settings`·`/auth`·`/internal`·study 등)은 403 |
+| `apService/apiToken/ApiTokenScope` | 서비스별 허용 경로(context-path 제외): `CIRA`, `DOCS`(`/api/v1/docs`), `STUDY`(`/api/v1/study`), `INTERFACE_TEST`(`/api/v1/interface-tests`), 전역 `ALL`(위 서비스 전체 — 서비스를 추가하면 자동 포함). 목록 밖(`/api-tokens`·`/settings`·`/auth`·`/internal`·`/api/mdm` 등)은 전역 토큰도 403 |
 | `apService/apiToken/ApiTokenService` | 발급(원문 1회, `SHA-256` hex 저장, 이름 1~100자, READ/WRITE, 30·90·365일, 사용자당 사용 중 20개), 조회, 폐기(`REVOKED_AT`), 서비스 on/off(`SN_SETTING` `api-token.{service}.enabled`, 없으면 허용), 요청 인증 |
 | `interfaces/controller/apiToken/ApiTokenController` | `GET·POST /api/v1/api-tokens`, `DELETE /{id}`(204, 남의 것 404), `GET /services`, `PUT /services/{service}` `{enabled}`(ADMIN) |
 
 - 토큰 형식 `d94_{service}_{base64url 32바이트}`. 토큰은 **발급 사용자로 동작**하므로 CIRA 권한 검사를 그대로 받는다(조회 권한이 열린 결함 [D18] 도 그대로).
 - 401: 없음·불일치·만료·폐기·소유자 `USE_STAT_CD≠Usable`. 403: 서비스 꺼짐·범위 밖·READ 토큰으로 GET/HEAD 외.
+- 전역 토큰(`d94_all_…`)은 `api-token.all.enabled` 와 **호출하는 서비스의** `api-token.{service}.enabled` 가 둘 다 켜져 있어야 통과(서비스 차단을 전역 토큰으로 우회 못 함). Ayaan 은 별도 앱(자체 JWT)이라 대상 아님.
 - `LAST_USED_AT` 은 1분에 한 번만 갱신. 로그에는 토큰 원문 대신 `d94_{service}_…` 만.
 - MCP 는 UMD 를 거치지 않고 게이트웨이(`/tsh/**`)로 바로 호출(UMD 는 JWT 만 통과).
 - 테이블 `SN_API_TOKEN` (`V560`). 테스트: `ApiTokenScopeTest`, `ApiTokenIT`(실제 필터 체인).
