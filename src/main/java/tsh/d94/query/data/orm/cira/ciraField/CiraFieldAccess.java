@@ -28,15 +28,18 @@ public class CiraFieldAccess {
 
 	public record TypeField(String fieldKey, boolean defaultVisible) {}
 
-	public record CustomField(String id, String projectId, String fieldNm, String fieldType, boolean required,
-		String optionsJson, int sortOrd) {}
+	/** 소속: projectId·projectTypeId 둘 다 null = 전역, projectTypeId = 타입, projectId = 프로젝트 (V600) */
+	public record CustomField(String id, String projectId, String projectTypeId, String fieldNm, String fieldType,
+		boolean required, String optionsJson, int sortOrd, String sourceFieldId, String createdBy) {}
 
 	public record CfValue(String issueId, String customFieldId, String valText, BigDecimal valNumber,
 		java.time.LocalDate valDt, String valJson) {}
 
 	public record ColumnPref(String fieldKeysJson, String knownKeysJson) {}
 
-	private static final String CF_COLS = "OBJ_ID, PROJECT_ID, FIELD_NM, FIELD_TYPE, REQUIRED_YN, OPTIONS::text, SORT_ORD";
+	private static final String CF_COLS =
+		"OBJ_ID, PROJECT_ID, PROJECT_TYPE_ID, FIELD_NM, FIELD_TYPE, REQUIRED_YN, OPTIONS::text, SORT_ORD, SOURCE_FIELD_ID, CREATED_BY";
+	private static final String CF_ORDER = " order by SORT_ORD, FIELD_NM";
 
 	private final JdbcTemplate jdbc;
 	private final NamedParameterJdbcTemplate named;
@@ -82,7 +85,8 @@ public class CiraFieldAccess {
 		jdbc.update("delete from SN_CIRA_PROJECT_TYPE where OBJ_ID=?", id);
 	}
 
-	public List<TypeField> typeFields(String typeId) {
+	/** 타입 기본 세트 (SN_CIRA_PROJECT_TYPE_FIELD) */
+	public List<TypeField> typeSet(String typeId) {
 		return jdbc.query("select FIELD_KEY, DEFAULT_VISIBLE_YN from SN_CIRA_PROJECT_TYPE_FIELD where PROJECT_TYPE_ID=? order by SORT_ORD",
 			(r, n) -> new TypeField(r.getString(1), "Y".equals(r.getString(2))), typeId);
 	}
@@ -111,10 +115,24 @@ public class CiraFieldAccess {
 
 	// ── 사용자 정의 필드 ─────────────────────────
 
-	/** 전역 필드(PROJECT_ID null) + projectId 가 있으면 그 프로젝트 전용 필드 */
-	public List<CustomField> customFields(String tenant, String projectId) {
-		return jdbc.query("select " + CF_COLS + " from SN_CIRA_CUSTOM_FIELD where TENANT=? and (PROJECT_ID is null or PROJECT_ID=?) order by SORT_ORD, FIELD_NM",
+	public List<CustomField> globalFields(String tenant) {
+		return jdbc.query("select " + CF_COLS + " from SN_CIRA_CUSTOM_FIELD where TENANT=? and PROJECT_ID is null and PROJECT_TYPE_ID is null"
+			+ CF_ORDER, this::cf, tenant);
+	}
+
+	public List<CustomField> typeFields(String tenant, String typeId) {
+		return jdbc.query("select " + CF_COLS + " from SN_CIRA_CUSTOM_FIELD where TENANT=? and PROJECT_TYPE_ID=?" + CF_ORDER,
+			this::cf, tenant, typeId);
+	}
+
+	public List<CustomField> projectCustomFields(String tenant, String projectId) {
+		return jdbc.query("select " + CF_COLS + " from SN_CIRA_CUSTOM_FIELD where TENANT=? and PROJECT_ID=?" + CF_ORDER,
 			this::cf, tenant, projectId);
+	}
+
+	/** 이 원본에서 복사해 간 필드 수 (타입·프로젝트 합계) */
+	public int copiesOf(String sourceFieldId) {
+		return jdbc.queryForObject("select count(*) from SN_CIRA_CUSTOM_FIELD where SOURCE_FIELD_ID=?", Integer.class, sourceFieldId);
 	}
 
 	public CustomField customField(String tenant, String id) {
@@ -123,14 +141,14 @@ public class CiraFieldAccess {
 		return rows.isEmpty() ? null : rows.get(0);
 	}
 
-	public String insertCustomField(String tenant, String projectId, String fieldNm, String fieldType, boolean required,
-		String optionsJson) {
+	public String insertCustomField(String tenant, String projectId, String projectTypeId, String fieldNm, String fieldType,
+		boolean required, String optionsJson, String sourceFieldId, String createdBy) {
 		String id = UUID.randomUUID().toString();
 		jdbc.update("""
-			insert into SN_CIRA_CUSTOM_FIELD(OBJ_ID, PROJECT_ID, FIELD_NM, FIELD_TYPE, REQUIRED_YN, OPTIONS, SORT_ORD,
-			  TENANT, USE_STAT_CD, EVNT_NM, PREV_EVNT_NM, CREATED_AT, MODIFIED_AT)
-			values(?,?,?,?,?,?::jsonb,0,?,'Usable','CreateCustomField','None',now(),now())""",
-			id, projectId, fieldNm, fieldType, required ? "Y" : "N", optionsJson, tenant);
+			insert into SN_CIRA_CUSTOM_FIELD(OBJ_ID, PROJECT_ID, PROJECT_TYPE_ID, FIELD_NM, FIELD_TYPE, REQUIRED_YN, OPTIONS, SORT_ORD,
+			  SOURCE_FIELD_ID, CREATED_BY, TENANT, USE_STAT_CD, EVNT_NM, PREV_EVNT_NM, CREATED_AT, MODIFIED_AT)
+			values(?,?,?,?,?,?,?::jsonb,0,?,?,?,'Usable','CreateCustomField','None',now(),now())""",
+			id, projectId, projectTypeId, fieldNm, fieldType, required ? "Y" : "N", optionsJson, sourceFieldId, createdBy, tenant);
 		return id;
 	}
 
@@ -214,7 +232,7 @@ public class CiraFieldAccess {
 	}
 
 	private CustomField cf(java.sql.ResultSet r, int n) throws java.sql.SQLException {
-		return new CustomField(r.getString(1), r.getString(2), r.getString(3), r.getString(4), "Y".equals(r.getString(5)),
-			r.getString(6), r.getInt(7));
+		return new CustomField(r.getString(1), r.getString(2), r.getString(3), r.getString(4), r.getString(5),
+			"Y".equals(r.getString(6)), r.getString(7), r.getInt(8), r.getString(9), r.getString(10));
 	}
 }

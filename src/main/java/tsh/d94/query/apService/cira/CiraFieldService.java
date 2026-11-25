@@ -85,14 +85,14 @@ public class CiraFieldService {
 	// ── 카탈로그 · 프로젝트 타입 (기준정보, 쓰기는 컨트롤러에서 ADMIN) ─────────
 
 	public Catalog catalog() {
-		return new Catalog(SYSTEM, access.customFields(tenant(), null).stream()
+		return new Catalog(SYSTEM, access.globalFields(tenant()).stream()
 			.map(cf -> toField(cf, null, true)).toList());
 	}
 
 	public List<ProjectType> types() {
 		return access.types(tenant()).stream()
 			.map(t -> new ProjectType(t.id(), t.typeNm(), t.descr(), t.sortOrd(), access.projectsUsingType(t.id()),
-				access.typeFields(t.id()).stream().map(f -> new TypeField(f.fieldKey(), f.defaultVisible())).toList()))
+				access.typeSet(t.id()).stream().map(f -> new TypeField(f.fieldKey(), f.defaultVisible())).toList()))
 			.toList();
 	}
 
@@ -127,7 +127,7 @@ public class CiraFieldService {
 	@Transactional
 	public ProjectType replaceTypeFields(String id, List<TypeField> fields) {
 		requireType(id);
-		Set<String> globalCf = access.customFields(tenant(), null).stream()
+		Set<String> globalCf = access.globalFields(tenant()).stream()
 			.filter(cf -> cf.projectId() == null).map(cf -> "cf:" + cf.id()).collect(Collectors.toSet());
 		Set<String> seen = new LinkedHashSet<>();
 		List<CiraFieldAccess.TypeField> rows = new ArrayList<>();
@@ -217,8 +217,8 @@ public class CiraFieldService {
 			throw new IllegalArgumentException("지원하지 않는 필드 타입입니다: " + req.fieldType());
 		}
 		ensureUniqueName(projectId, name, null);
-		String id = access.insertCustomField(tenant(), projectId, name, req.fieldType(), Boolean.TRUE.equals(req.required()),
-			optionsJson(req.fieldType(), req.options()));
+		String id = access.insertCustomField(tenant(), projectId, null, name, req.fieldType(), Boolean.TRUE.equals(req.required()),
+			optionsJson(req.fieldType(), req.options()), null, null);
 		return toField(access.customField(tenant(), id), null, true);
 	}
 
@@ -262,7 +262,7 @@ public class CiraFieldService {
 		Map<String, Field> out = new LinkedHashMap<>();
 		FIXED.forEach(k -> out.put(k, withSource(SYSTEM_BY_KEY.get(k), "fixed", true)));
 		if (project.getProjectTypeId() != null) {
-			for (CiraFieldAccess.TypeField tf : access.typeFields(project.getProjectTypeId())) {
+			for (CiraFieldAccess.TypeField tf : access.typeSet(project.getProjectTypeId())) {
 				Field f = resolve(tf.fieldKey(), cfs);
 				if (f != null) {
 					out.putIfAbsent(f.fieldKey(), withSource(f, "type", tf.defaultVisible()));
@@ -498,7 +498,7 @@ public class CiraFieldService {
 
 	/** 같은 범위(전역 / 그 프로젝트)에서 이름 중복 금지. 전역 null 은 DB UNIQUE 가 못 막는다 */
 	private void ensureUniqueName(String projectId, String name, String selfId) {
-		boolean dup = access.customFields(tenant(), projectId).stream()
+		boolean dup = (projectId == null ? access.globalFields(tenant()) : access.projectCustomFields(tenant(), projectId)).stream()
 			.anyMatch(cf -> java.util.Objects.equals(cf.projectId(), projectId) && cf.fieldNm().equals(name)
 				&& !cf.id().equals(selfId));
 		if (dup) {
@@ -519,7 +519,8 @@ public class CiraFieldService {
 	}
 
 	private Map<String, CustomField> visibleCustomFields(String projectId) {
-		return access.customFields(tenant(), projectId).stream()
+		return java.util.stream.Stream.concat(access.globalFields(tenant()).stream(),
+				access.projectCustomFields(tenant(), projectId).stream())
 			.collect(Collectors.toMap(CustomField::id, Function.identity()));
 	}
 
