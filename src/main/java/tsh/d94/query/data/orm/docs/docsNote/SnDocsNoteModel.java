@@ -22,8 +22,12 @@ import tsh.d94.lib.core.data.orm.common.model.BaseModel;
 @SuperBuilder
 public class SnDocsNoteModel extends BaseModel {
 
+	/** 만든 사람(이메일). 접근 범위는 vaultId */
 	@Column(name = "OWNER_ID", length = 200, nullable = false)
 	private String ownerId;
+
+	@Column(name = "VAULT_ID", nullable = false)
+	private String vaultId;
 
 	/** null = vault 최상위 */
 	@Column(name = "FOLDER_ID")

@@ -32,14 +32,16 @@ import tsh.d94.app.server.apService.docs.DocsDtos.NoteResponse;
 import tsh.d94.app.server.apService.docs.DocsDtos.NoteSummary;
 import tsh.d94.app.server.apService.docs.DocsDtos.TaskResponse;
 import tsh.d94.app.server.apService.docs.DocsDtos.TaskStatusRequest;
+import tsh.d94.app.server.apService.docs.DocsDtos.VaultResponse;
 import tsh.d94.app.server.apService.docs.DocsDtos.VersionResponse;
 import tsh.d94.app.server.apService.docs.DocsEvolveService;
 import tsh.d94.app.server.apService.docs.DocsFolderService;
 import tsh.d94.app.server.apService.docs.DocsImageService;
 import tsh.d94.app.server.apService.docs.DocsNoteService;
+import tsh.d94.app.server.apService.docs.DocsVaultService;
 import tsh.d94.lib.core.interfaces.rest.ApiResponse;
 
-/** Docs — 로그인 사용자의 개인 vault. 남의 폴더·노트는 404. */
+/** Docs — 내 Private vault + 소속 CIRA 프로젝트 Team vault. 접근 못 하는 폴더·노트는 404. */
 @RestController
 @RequestMapping("/api/v1/docs")
 @RequiredArgsConstructor
@@ -49,12 +51,22 @@ public class DocsController {
 	private final DocsNoteService notes;
 	private final DocsEvolveService evolve;
 	private final DocsImageService images;
+	private final DocsVaultService vaults;
 
 	// ── 폴더 ──
 
+	// ── vault ──
+
+	/** 내 Private + 소속 프로젝트 Team vault */
+	@GetMapping("/vaults")
+	public ApiResponse<List<VaultResponse>> vaults() {
+		return ApiResponse.ok(vaults.vaults());
+	}
+
+	/** vaultId 생략·ALL = 통합 뷰 */
 	@GetMapping("/folders")
-	public ApiResponse<List<FolderResponse>> listFolders() {
-		return ApiResponse.ok(folders.list());
+	public ApiResponse<List<FolderResponse>> listFolders(@RequestParam(required = false) String vaultId) {
+		return ApiResponse.ok(folders.list(vaultId));
 	}
 
 	@PostMapping("/folders")
@@ -82,21 +94,24 @@ public class DocsController {
 
 	/** folderId="" 이면 최상위 노트만, 생략하면 전체 */
 	@GetMapping("/notes")
-	public ApiResponse<List<NoteSummary>> listNotes(@RequestParam(required = false) String folderId,
+	public ApiResponse<List<NoteSummary>> listNotes(@RequestParam(required = false) String vaultId,
+		@RequestParam(required = false) String folderId,
 		@RequestParam(required = false) String q, @RequestParam(required = false) String kind,
 		@RequestParam(required = false) String stream, @RequestParam(required = false) String tag,
 		@RequestParam(required = false) String origin) {
-		return ApiResponse.ok(notes.list(folderId, q, kind, stream, tag, origin));
+		return ApiResponse.ok(notes.list(vaultId, folderId, q, kind, stream, tag, origin));
 	}
 
 	@GetMapping("/notes/titles")
-	public ApiResponse<List<String>> titles(@RequestParam(required = false) String prefix) {
-		return ApiResponse.ok(notes.titles(prefix));
+	public ApiResponse<List<String>> titles(@RequestParam(required = false) String vaultId,
+		@RequestParam(required = false) String prefix) {
+		return ApiResponse.ok(notes.titles(vaultId, prefix));
 	}
 
 	@GetMapping("/notes/by-title")
-	public ApiResponse<NoteResponse> byTitle(@RequestParam String title) {
-		return ApiResponse.ok(notes.getByTitle(title));
+	public ApiResponse<NoteResponse> byTitle(@RequestParam String title,
+		@RequestParam(required = false) String vaultId) {
+		return ApiResponse.ok(notes.getByTitle(title, vaultId));
 	}
 
 	@PostMapping("/notes")
@@ -153,10 +168,11 @@ public class DocsController {
 	}
 
 	@GetMapping("/tasks")
-	public ApiResponse<List<TaskResponse>> tasks(@RequestParam(required = false) String status,
+	public ApiResponse<List<TaskResponse>> tasks(@RequestParam(required = false) String vaultId,
+		@RequestParam(required = false) String status,
 		@RequestParam(required = false) String tag, @RequestParam(required = false) String stream,
 		@RequestParam(required = false) LocalDate dueBefore) {
-		return ApiResponse.ok(evolve.tasks(status, tag, stream, dueBefore));
+		return ApiResponse.ok(evolve.tasks(vaultId, status, tag, stream, dueBefore));
 	}
 
 	@PutMapping("/tasks/{noteId}/{lineNo}")

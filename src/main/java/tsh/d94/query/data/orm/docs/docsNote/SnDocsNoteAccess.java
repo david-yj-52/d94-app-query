@@ -19,12 +19,8 @@ public class SnDocsNoteAccess extends AbstractCrudService<SnDocsNoteModel, Strin
 		return repo;
 	}
 
-	public Optional<SnDocsNoteModel> findOwned(String id, String ownerId) {
-		return repo.findByObjIdAndOwnerId(id, ownerId);
-	}
-
-	public Optional<SnDocsNoteModel> findByTitle(String ownerId, String title) {
-		return repo.findByOwnerIdAndTitle(ownerId, title);
+	public Optional<SnDocsNoteModel> findByTitle(String vaultId, String title) {
+		return repo.findByVaultIdAndTitle(vaultId, title);
 	}
 
 	public long countByFolder(String folderId) {

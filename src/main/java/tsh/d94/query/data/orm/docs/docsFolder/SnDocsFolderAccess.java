@@ -1,5 +1,6 @@
 package tsh.d94.app.server.data.orm.docs.docsFolder;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,12 +21,14 @@ public class SnDocsFolderAccess extends AbstractCrudService<SnDocsFolderModel, S
 		return repo;
 	}
 
-	public List<SnDocsFolderModel> findByOwner(String ownerId) {
-		return repo.findByOwnerIdOrderBySortOrderAscNameAsc(ownerId);
+	public List<SnDocsFolderModel> findByVaults(Collection<String> vaultIds) {
+		return vaultIds.isEmpty() ? List.of() : repo.findByVaultIdInOrderBySortOrderAscNameAsc(vaultIds);
 	}
 
-	public Optional<SnDocsFolderModel> findOwned(String id, String ownerId) {
-		return repo.findByObjIdAndOwnerId(id, ownerId);
+	/** parentId null = 최상위 */
+	public Optional<SnDocsFolderModel> findChild(String vaultId, String parentId, String name) {
+		return parentId == null ? repo.findByVaultIdAndParentIdIsNullAndName(vaultId, name)
+			: repo.findByVaultIdAndParentIdAndName(vaultId, parentId, name);
 	}
 
 	public long countChildFolders(String parentId) {

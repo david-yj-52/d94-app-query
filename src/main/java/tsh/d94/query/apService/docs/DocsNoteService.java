@@ -25,7 +25,8 @@ import tsh.d94.app.server.data.orm.docs.docsNote.SnDocsNoteModel;
 
 /**
  * 노트 CRUD. 본문(Markdown)이 원천이고, 저장할 때마다 버전 1건을 남기고 색인을 다시 만든다.
- * 제목을 바꾸면 그 제목을 링크한 내 노트들의 [[옛 제목]] 을 같은 트랜잭션에서 고친다.
+ * 제목을 바꾸면 그 제목을 링크한 같은 vault 노트들의 [[옛 제목]] 을 같은 트랜잭션에서 고친다.
+ * 제목·링크·계보는 vault 안에서만 유일·해석된다.
  */
 @Service
 @RequiredArgsConstructor
@@ -37,41 +38,51 @@ public class DocsNoteService {
 	private final SnDocsNoteAccess noteAccess;
 	private final DocsIndexAccess index;
 	private final DocsFolderService folders;
+	private final DocsVaultService vaults;
 
-	/** 없거나 남의 노트면 404 (존재 여부를 숨긴다) */
+	/** 없거나 접근 못 하는 vault 의 노트면 404 (존재 여부를 숨긴다) */
 	public SnDocsNoteModel requireOwned(String id) {
-		return noteAccess.findOwned(id, Docs.owner()).orElseThrow(() -> new DocsException(NOT_FOUND));
+		return noteAccess.findByIdOptional(id).filter(n -> vaults.canAccess(n.getVaultId()))
+			.orElseThrow(() -> new DocsException(NOT_FOUND));
 	}
 
-	public List<NoteSummary> list(String folderId, String q, String kind, String stream, String tag, String origin) {
-		return index.listNotes(Docs.owner(), folderId, q, kind, stream, tag, origin).stream().map(NoteSummary::of)
-			.toList();
+	public List<NoteSummary> list(String vaultId, String folderId, String q, String kind, String stream, String tag,
+		String origin) {
+		return index.listNotes(vaults.scope(vaultId), folderId, q, kind, stream, tag, origin).stream()
+			.map(NoteSummary::of).toList();
 	}
 
-	public List<String> titles(String prefix) {
-		return index.titles(Docs.owner(), prefix);
+	public List<String> titles(String vaultId, String prefix) {
+		return index.titles(vaults.scope(vaultId), prefix);
 	}
 
 	public NoteResponse get(String id) {
 		return toResponse(requireOwned(id));
 	}
 
-	public NoteResponse getByTitle(String title) {
-		return toResponse(noteAccess.findByTitle(Docs.owner(), title).orElseThrow(() -> new DocsException(NOT_FOUND)));
+	/** 범위(통합이면 Private 먼저) 안에서 제목이 같은 첫 노트 */
+	public NoteResponse getByTitle(String title, String vaultId) {
+		return vaults.scope(vaultId).stream().map(v -> noteAccess.findByTitle(v, title)).flatMap(java.util.Optional::stream)
+			.findFirst().map(this::toResponse).orElseThrow(() -> new DocsException(NOT_FOUND));
 	}
 
 	@Transactional
 	public NoteResponse create(NoteRequest req) {
 		String folderId = DocsFolderService.blankToNull(req.folderId());
-		if (folderId != null) {
-			folders.requireOwned(folderId);
-		}
-		String title = Docs.name(req.title(), 500, FORBIDDEN, "제목");
-		requireFreeTitle(title, null);
-		String content = req.content() == null ? "" : req.content();
+		String vaultId = folderId != null ? folders.requireOwned(folderId).getVaultId() : vaults.target(req.vaultId());
+		return toResponse(createIn(vaultId, folderId, req.title(), req.content()));
+	}
+
+	/** vault·폴더 권한 검사 없이 만든다 — 호출 쪽(create, CIRA 연동)이 검사한다 */
+	@Transactional
+	public SnDocsNoteModel createIn(String vaultId, String folderId, String rawTitle, String rawContent) {
+		String title = Docs.name(rawTitle, 500, FORBIDDEN, "제목");
+		requireFreeTitle(vaultId, title, null);
+		String content = rawContent == null ? "" : rawContent;
 		Index ix = DocsMarkdownIndexer.index(content);
 		SnDocsNoteModel n = Docs.base(SnDocsNoteModel.builder(), "CreateDocsNote")
 			.ownerId(Docs.owner())
+			.vaultId(vaultId)
 			.folderId(folderId)
 			.title(title)
 			.content(content)
@@ -81,7 +92,7 @@ public class DocsNoteService {
 			.build();
 		n = save(n);
 		afterSave(n, ix);
-		return toResponse(n);
+		return n;
 	}
 
 	@Transactional
@@ -94,10 +105,10 @@ public class DocsNoteService {
 		String content = req.content() == null ? n.getContent() : req.content();
 		String oldTitle = n.getTitle();
 		if (!title.equals(oldTitle)) {
-			requireFreeTitle(title, id);
-			for (var ref : index.backlinks(Docs.owner(), oldTitle)) {
+			requireFreeTitle(n.getVaultId(), title, id);
+			for (var ref : index.backlinks(n.getVaultId(), oldTitle)) {
 				if (!ref.id().equals(id)) {
-					SnDocsNoteModel other = requireOwned(ref.id());
+					SnDocsNoteModel other = noteAccess.findById(ref.id()); // 같은 vault
 					write(other, other.getTitle(), DocsMarkdownIndexer.renameLinks(other.getContent(), oldTitle, title));
 				}
 			}
@@ -111,8 +122,9 @@ public class DocsNoteService {
 	public NoteResponse move(String id, MoveNoteRequest req) {
 		SnDocsNoteModel n = requireOwned(id);
 		String folderId = DocsFolderService.blankToNull(req.folderId());
-		if (folderId != null) {
-			folders.requireOwned(folderId);
+		if (folderId != null && !folders.requireOwned(folderId).getVaultId().equals(n.getVaultId())) {
+			// ponytail: vault 간 이동은 막는다(링크·계보가 vault 단위). 필요하면 복사 후 삭제
+			throw new DocsException(INVALID_REQUEST, "다른 vault 의 폴더로는 옮길 수 없습니다.");
 		}
 		n.setFolderId(folderId);
 		return toResponse(save(n));
@@ -132,8 +144,14 @@ public class DocsNoteService {
 
 	public List<NoteSummary> backlinks(String id) {
 		SnDocsNoteModel n = requireOwned(id);
-		return index.backlinks(Docs.owner(), n.getTitle()).stream().filter(r -> !r.id().equals(id))
+		return index.backlinks(n.getVaultId(), n.getTitle()).stream().filter(r -> !r.id().equals(id))
 			.map(NoteSummary::of).toList();
+	}
+
+	/** 권한·version 검사 없이 최신 행에 저장 (CIRA 진행 경과 등 서버 내부 기록). 호출 쪽이 최신 행을 읽어 고친다 */
+	@Transactional
+	public void writeInternal(SnDocsNoteModel n, String title, String content) {
+		write(n, title, content);
 	}
 
 	/** 제목·본문을 바꿔 저장: 버전 +1, 버전 이력 1건, 색인 교체 */
@@ -153,8 +171,12 @@ public class DocsNoteService {
 		index.replaceIndex(n.getObjId(), ix.links(), ix.tags(), ix.tasks());
 	}
 
-	private void requireFreeTitle(String title, String selfId) {
-		noteAccess.findByTitle(Docs.owner(), title)
+	public boolean titleTaken(String vaultId, String title) {
+		return noteAccess.findByTitle(vaultId, title).isPresent();
+	}
+
+	private void requireFreeTitle(String vaultId, String title, String selfId) {
+		noteAccess.findByTitle(vaultId, title)
 			.filter(o -> !o.getObjId().equals(selfId))
 			.ifPresent(o -> {
 				throw new DocsException(DUPLICATE_TITLE);
@@ -173,10 +195,10 @@ public class DocsNoteService {
 		Index ix = DocsMarkdownIndexer.index(n.getContent());
 		Set<String> titles = new HashSet<>();
 		ix.links().forEach(l -> titles.add(l.toTitle()));
-		Set<String> existing = new HashSet<>(index.existingTitles(Docs.owner(), titles));
+		Set<String> existing = new HashSet<>(index.existingTitles(n.getVaultId(), titles));
 		List<LinkRef> links = ix.links().stream()
 			.map(l -> new LinkRef(l.toTitle(), l.rel(), existing.contains(l.toTitle()))).toList();
-		return new NoteResponse(n.getObjId(), n.getTitle(), n.getContent(), n.getFolderId(), n.getKind(),
+		return new NoteResponse(n.getObjId(), n.getVaultId(), n.getTitle(), n.getContent(), n.getFolderId(), n.getKind(),
 			n.getStream(), ix.origin(), Objects.requireNonNullElse(n.getVersion(), 1), index.tags(n.getObjId()), links,
 			n.getCreatedAt(), n.getModifiedAt());
 	}

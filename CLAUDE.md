@@ -150,7 +150,7 @@ sequenceDiagram
 | `MessageOutboundController`     | `/util/message-outbound` | 메시지 수동 발행 유틸 |
 | `AuthController`                | `/api/v1/auth`           | lib-core `BaseAuthController`(register·login·refresh·logout) + `GET /public-key`. login·register 본문은 암호화 봉투 `{enc}` 만 받음 (아래 "자격 증명 암호화") |
 | `StudyController`               | `/api/v1/study`          | PDF 학습 뷰어 — 분할 업로드(`documents/uploads`, 조각 768KB), 문서·목차·페이지·그림, 단어장(`terms`), 마킹·노트(`annotations`). 아래 "PDF 학습 뷰어" |
-| `DocsController`                | `/api/v1/docs`           | Docs 개인 vault — 폴더·노트 CRUD·이동, 목록 필터·titles·by-title, 버전·백링크, 진화(derive·kind·lineage), Task(`tasks`, 상태 변경·노트 승격). 아래 "Docs" |
+| `DocsController`                | `/api/v1/docs`           | Docs 다중 vault(`GET /vaults`, 목록·Task·titles 에 `vaultId`, 생략·`ALL`=통합 뷰) — 폴더·노트 CRUD·이동, 목록 필터·titles·by-title, 버전·백링크, 진화(derive·kind·lineage), Task(`tasks`, 상태 변경·노트 승격). 아래 "Docs" |
 | `LifeMetricController`          | `/api/v1/life-metric`    | Life Metric(삶의 수치화) — 템플릿, 지표 CRUD, 기준값(`inputs`), 시계열 로그(`logs`), 평가(`evaluate`), 저장 전 미리보기(`preview`). 아래 "Life Metric" |
 | `InterfaceTestController`       | `/api/v1/interface-tests` | 인터페이스(통신) 테스트 CRUD — GET·HEAD·POST(201)·PUT·PATCH·DELETE(204) |
 | `GlobalExceptionHandler`        | —                        | 전역 예외 처리        |
@@ -236,8 +236,21 @@ sequenceDiagram
 | `data/orm/docs/docsIndex/DocsIndexAccess` | 버전·링크·태그·Task·목록·백링크·계보 SQL (JdbcTemplate). `addVersion` 은 같은 사람이 5분 안에 같은 제목으로 다시 저장하면 직전 이력을 바꿔치기(자동 저장 이력 폭증 방지, 제목 변경은 남김) |
 
 - 테이블 `SN_DOCS_FOLDER`·`SN_DOCS_NOTE`(엔티티, `@Audited` 미사용, 물리 삭제) + `SN_DOCS_NOTE_VER`·`LINK`·`TAG`·`TASK`(JDBC 전용, 노트 삭제 시 CASCADE) — `V570`. 엔티티 컬럼 길이는 V570 과 같게 둔다(`ddl-auto=update` 가 엔티티 기준으로 ALTER).
-- 소유자 = 로그인 이메일(`OWNER_ID`), 남의 데이터 404. 제목은 `(TENANT, OWNER_ID, TITLE)` 유일. 링크 대상은 제목으로 저장하고 조회 때 맞춘다(없는 노트 링크 허용).
-- 테스트: `DocsMarkdownIndexerTest`, `DocsImageServiceTest`, `DocsFlowIT`.
+- 접근 범위 = vault(`SN_DOCS_VAULT`, V620). `PRIVATE` 는 소유자 이메일만, `TEAM` 은 그 CIRA 프로젝트의 Usable 멤버만(`DocsVaultService`), 못 보면 404. `OWNER_ID` 는 만든 사람. 제목·폴더 이름은 vault 안에서 유일, 링크·백링크·계보도 vault 안에서만 맞춘다(크로스 vault 링크 미구현). 노트를 다른 vault 폴더로 옮기기는 400.
+- 테스트: `DocsMarkdownIndexerTest`, `DocsImageServiceTest`, `DocsFlowIT`, `CiraDocsIT`.
+
+### CIRA Task ↔ Docs
+
+설계: DOCS 노트 "CIRA – Docs 통합 및 다중 Vault 설계" (설계서의 V610 은 life-metric 이 써서 `V620`)
+
+| 클래스 | 역할 |
+|---|---|
+| `apService/cira/CiraDocsService` | `IssueService` 가 쏜 `IssueCreated/StatusChanged/AssignedEvent` 를 같은 트랜잭션에서 받아: Task 생성 → 프로젝트 Team vault(없으면 생성) `task/{projectKey}/{issueKey}` 에 메인 노트(`{issueKey} {제목}`, frontmatter kind·project·issueKey·issueType·status) + `AUTO_CREATE_YN=Y` 슬롯 폴더, 상태·담당자 변경 → 최신 본문의 `## 진행 경과` 끝에 한 줄(버전 +1). 파생(기준정보 슬롯 또는 자유 폴더), Docs 노트 → Task 승격(메인 노트 origin), 기준정보 저장(프로젝트 ADMIN) |
+| `data/orm/cira/ciraDocs/CiraDocsAccess` | `SN_CIRA_ISSUE_DOC`(MAIN 1개·DERIVED 여러 개, 노트 삭제 시 CASCADE)·`SN_CIRA_DOC_RULE` JdbcTemplate |
+| `interfaces/controller/cira/CiraDocsController` | `/api/v1/projects/{id}/doc-rules[/{issueTypeId}]`, `/issues/{issueId}/docs`(GET 조회·POST 온디맨드 메인 생성), `/issues/{issueId}/docs/derive`, `/docs/notes/{noteId}/promote-to-cira` |
+
+- 자동화(`AutomationEventListener`)가 직접 쏜 이벤트는 무시한다(로그인 사용자·트랜잭션 없음). 진행 경과 시각은 `LOG_TZ`.
+- 미구현: 이슈 제목 변경 → 메인 노트 제목 동기화, `[[D94-12]]` 이슈 키 링크 해석, 크로스 vault 링크(`TO_VAULT_ID`).
 
 ### Life Metric (삶의 수치화)
 
