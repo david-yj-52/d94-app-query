@@ -68,7 +68,8 @@ class LifeMetricFlowIT {
 		login("lm");
 		List<TemplateResponse> ts = service.templates();
 		assertThat(ts).extracting(TemplateResponse::code)
-			.contains("remaining_life", "hourly_wage", "car_depreciation");
+			.contains("remaining_life", "hourly_wage", "car_depreciation", "bmi", "weekends_left", "spending_work_hours");
+		ts.forEach(t -> LifeMetricFormulaEngine.validate(t.defaultFormula())); // 시드 수식은 모두 문법이 맞아야 한다
 		String wageTpl = ts.stream().filter(t -> t.code().equals("hourly_wage")).findFirst().orElseThrow().id();
 		String carTpl = ts.stream().filter(t -> t.code().equals("car_depreciation")).findFirst().orElseThrow().id();
 
