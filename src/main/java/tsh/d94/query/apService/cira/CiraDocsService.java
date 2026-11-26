@@ -7,6 +7,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.UnaryOperator;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -113,8 +114,10 @@ public class CiraDocsService {
 	@EventListener
 	public void onStatusChanged(IssueStatusChangedEvent e) {
 		if (e.getSource() instanceof IssueService) {
+			// frontmatter status 도 같은 저장(버전 1건)에서 갱신 — RAG·목록이 옛 상태를 보지 않게
 			appendProgress(e.getIssueId(), "상태 변경: " + statusNm(e.getFromStatus()) + " → " + statusNm(e.getToStatus())
-				+ " (by " + userNm(e.getChangedBy()) + ")");
+				+ " (by " + userNm(e.getChangedBy()) + ")",
+				c -> DocsMarkdownIndexer.setFrontmatter(c, "status", q(statusNm(e.getToStatus()))));
 		}
 	}
 
@@ -288,8 +291,12 @@ public class CiraDocsService {
 	}
 
 	private void appendProgress(String issueId, String text) {
+		appendProgress(issueId, text, UnaryOperator.identity());
+	}
+
+	private void appendProgress(String issueId, String text, UnaryOperator<String> edit) {
 		access.mainNoteId(issueId).flatMap(noteAccess::findByIdOptional).ifPresent(n ->
-			notes.writeInternal(n, n.getTitle(), withProgress(n.getContent(), "- " + now() + " | " + text)));
+			notes.writeInternal(n, n.getTitle(), withProgress(edit.apply(n.getContent()), "- " + now() + " | " + text)));
 	}
 
 	/** "## 진행 경과" 섹션 끝(다음 # 제목 앞, 빈 줄 제외)에 한 줄. 섹션이 없으면 본문 끝에 섹션을 만든다. 나머지 본문은 그대로 */
