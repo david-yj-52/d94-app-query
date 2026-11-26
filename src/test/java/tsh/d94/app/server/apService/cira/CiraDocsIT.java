@@ -91,7 +91,8 @@ class CiraDocsIT {
 		issues.changeStatus(issue.getId(), cs);
 		NoteResponse after = notes.get(main.id());
 		assertThat(after.version()).isEqualTo(main.version() + 1);
-		assertThat(after.content()).contains("상태 변경: To Do → In Progress");
+		assertThat(after.content()).contains("상태 변경: To Do → In Progress")
+			.contains("status: \"In Progress\"").doesNotContain("status: \"To Do\"");
 
 		// 슬롯 파생: plan 폴더(lazy 생성) + origin + 템플릿, DERIVED 연결 → 계보
 		String planRule = rules.get(1).id();
