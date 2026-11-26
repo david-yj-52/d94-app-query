@@ -151,6 +151,7 @@ sequenceDiagram
 | `AuthController`                | `/api/v1/auth`           | lib-core `BaseAuthController`(register·login·refresh·logout) + `GET /public-key`. login·register 본문은 암호화 봉투 `{enc}` 만 받음 (아래 "자격 증명 암호화") |
 | `StudyController`               | `/api/v1/study`          | PDF 학습 뷰어 — 분할 업로드(`documents/uploads`, 조각 768KB), 문서·목차·페이지·그림, 단어장(`terms`), 마킹·노트(`annotations`). 아래 "PDF 학습 뷰어" |
 | `DocsController`                | `/api/v1/docs`           | Docs 개인 vault — 폴더·노트 CRUD·이동, 목록 필터·titles·by-title, 버전·백링크, 진화(derive·kind·lineage), Task(`tasks`, 상태 변경·노트 승격). 아래 "Docs" |
+| `LifeMetricController`          | `/api/v1/life-metric`    | Life Metric(삶의 수치화) — 템플릿, 지표 CRUD, 기준값(`inputs`), 시계열 로그(`logs`), 평가(`evaluate`), 저장 전 미리보기(`preview`). 아래 "Life Metric" |
 | `InterfaceTestController`       | `/api/v1/interface-tests` | 인터페이스(통신) 테스트 CRUD — GET·HEAD·POST(201)·PUT·PATCH·DELETE(204) |
 | `GlobalExceptionHandler`        | —                        | 전역 예외 처리        |
 
@@ -175,7 +176,7 @@ sequenceDiagram
 | 클래스 | 역할 |
 |---|---|
 | `config/ApiTokenSecurityConfig` | `@Order(2)` 체인. `Authorization: Bearer d94_…` 요청만 매칭. 필터는 `@Bean` 아님(서블릿 전역 자동 등록 방지). 성공 시 소유자 `D94UserDetails`·`TenantContext` 설정, 실패는 JSON `ApiResponse` 401/403 |
-| `apService/apiToken/ApiTokenScope` | 서비스별 허용 경로(context-path 제외): `CIRA`, `DOCS`(`/api/v1/docs`), `STUDY`(`/api/v1/study`), `INTERFACE_TEST`(`/api/v1/interface-tests`), 전역 `ALL`(위 서비스 전체 — 서비스를 추가하면 자동 포함). 목록 밖(`/api-tokens`·`/settings`·`/auth`·`/internal`·`/api/mdm` 등)은 전역 토큰도 403 |
+| `apService/apiToken/ApiTokenScope` | 서비스별 허용 경로(context-path 제외): `CIRA`, `DOCS`(`/api/v1/docs`), `STUDY`(`/api/v1/study`), `INTERFACE_TEST`(`/api/v1/interface-tests`), `LIFE_METRIC`(`/api/v1/life-metric`), 전역 `ALL`(위 서비스 전체 — 서비스를 추가하면 자동 포함). 목록 밖(`/api-tokens`·`/settings`·`/auth`·`/internal`·`/api/mdm` 등)은 전역 토큰도 403 |
 | `apService/apiToken/ApiTokenService` | 발급(원문 1회, `SHA-256` hex 저장, 이름 1~100자, READ/WRITE, 30·90·365일, 사용자당 사용 중 20개), 조회, 폐기(`REVOKED_AT`), 서비스 on/off(`SN_SETTING` `api-token.{service}.enabled`, 없으면 허용), 요청 인증 |
 | `interfaces/controller/apiToken/ApiTokenController` | `GET·POST /api/v1/api-tokens`, `DELETE /{id}`(204, 남의 것 404), `GET /services`, `PUT /services/{service}` `{enabled}`(ADMIN) |
 
@@ -237,6 +238,21 @@ sequenceDiagram
 - 테이블 `SN_DOCS_FOLDER`·`SN_DOCS_NOTE`(엔티티, `@Audited` 미사용, 물리 삭제) + `SN_DOCS_NOTE_VER`·`LINK`·`TAG`·`TASK`(JDBC 전용, 노트 삭제 시 CASCADE) — `V570`. 엔티티 컬럼 길이는 V570 과 같게 둔다(`ddl-auto=update` 가 엔티티 기준으로 ALTER).
 - 소유자 = 로그인 이메일(`OWNER_ID`), 남의 데이터 404. 제목은 `(TENANT, OWNER_ID, TITLE)` 유일. 링크 대상은 제목으로 저장하고 조회 때 맞춘다(없는 노트 링크 허용).
 - 테스트: `DocsMarkdownIndexerTest`, `DocsImageServiceTest`, `DocsFlowIT`.
+
+### Life Metric (삶의 수치화)
+
+계획: d94 Docs `life_metric 서비스 기획 및 개발 계획서` · 작업: CIRA LMTR-1~6
+
+| 클래스 | 역할 |
+|---|---|
+| `apService/lifeMetric/LifeMetricFormulaEngine` | 재귀 하강 수식 평가: `+ - * /`·괄호·단항 `-`, 기준값 키, `@code`(다른 지표), `now()`(오늘 epoch day)·`daysBetween(a,b)`=b-a·`sum|avg|count(로그키[, 최근N일])`. 날짜 기준값은 epoch day. 문법 오류 `INVALID_FORMULA`(400), 0 나누기·값 없음 `EVALUATION_FAILED`. `validate`(값 1로 문법만), `refs`, `findCycle` |
+| `apService/lifeMetric/LifeMetricService` | 템플릿 조회, 지표 CRUD(코드 `[a-z][a-z0-9_]{0,49}` 소유자 안 유일·생성 후 불변, 템플릿 지정+수식 비우면 템플릿 복사), 저장 시 문법+`@` 순환 검사, 기준값 upsert(null·빈 문자열 삭제), 로그 등록·조회·삭제, 평가(목록·상세 응답에 `value`/`error` 포함, 실행 중 순환도 방어), 미리보기(로그 집계 0) |
+| `data/orm/lifeMetric/{lifeMetricTemplate,lifeMetric}` | 엔티티 `SnLifeMetricTemplateModel`(V610 시드 3종, `TENANT='*'` 공용 — tenant 필터 안 켜는 repo 메서드만 사용)·`SnLifeMetricModel` |
+| `data/orm/lifeMetric/{lifeMetricInput,lifeMetricLog}` | JdbcTemplate: `SnLifeMetricInputAccess`(기준값 upsert), `SnLifeMetricLogAccess`(로그 + 기간 `SUM/AVG/COUNT`) |
+
+- 테이블 `SN_LIFE_METRIC_TEMPLATE`·`SN_LIFE_METRIC`(엔티티, `@Audited` 미사용, 물리 삭제) + `SN_LIFE_METRIC_INPUT`·`SN_LIFE_METRIC_LOG`(JDBC, 지표 삭제 시 CASCADE) — `V610`(계획서의 V580 은 이미 사용 중). 기본 템플릿 `remaining_life`·`hourly_wage`·`car_depreciation`.
+- 소유자 = 로그인 이메일 + `TenantContext`, 남의 지표·기준값·로그는 404. `@code` 는 같은 소유자 지표만 찾는다.
+- 테스트: `LifeMetricFormulaEngineTest`, `LifeMetricFlowIT`(흐름·순환·격리·API 토큰 범위).
 
 ### Tenant 결정
 

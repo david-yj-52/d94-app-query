@@ -28,6 +28,11 @@ class ApiTokenScopeTest {
 		assertThat(ApiTokenScope.DOCS.allows("/api/v1/projects")).isFalse();
 		assertThat(ApiTokenScope.STUDY.allows("/api/v1/study/documents")).isTrue();
 		assertThat(ApiTokenScope.INTERFACE_TEST.allows("/api/v1/interface-tests/1")).isTrue();
+		assertThat(ApiTokenScope.LIFE_METRIC.allows("/api/v1/life-metric/metrics/m1/evaluate")).isTrue();
+		assertThat(ApiTokenScope.LIFE_METRIC.allows("/api/v1/life-metricX")).isFalse();
+		assertThat(ApiTokenScope.LIFE_METRIC.allows("/api/v1/docs/notes")).isFalse();
+		assertThat(ApiTokenScope.ownerOf("/api/v1/life-metric/templates")).isEqualTo(ApiTokenScope.LIFE_METRIC);
+		assertThat(ApiTokenScope.of("life-metric")).isEqualTo(ApiTokenScope.LIFE_METRIC);
 		assertThat(ApiTokenScope.ownerOf("/api/v1/docs/folders")).isEqualTo(ApiTokenScope.DOCS);
 		assertThat(ApiTokenScope.ownerOf("/api/v1/settings")).isNull();
 	}
@@ -39,6 +44,7 @@ class ApiTokenScopeTest {
 		assertThat(all.allows("/api/v1/docs/notes")).isTrue();
 		assertThat(all.allows("/api/v1/study/documents")).isTrue();
 		assertThat(all.allows("/api/v1/interface-tests")).isTrue();
+		assertThat(all.allows("/api/v1/life-metric/metrics")).isTrue();
 		assertThat(all.allows("/api/v1/api-tokens")).isFalse();
 		assertThat(all.allows("/api/v1/settings")).isFalse();
 		assertThat(all.allows("/api/v1/auth/login")).isFalse();
