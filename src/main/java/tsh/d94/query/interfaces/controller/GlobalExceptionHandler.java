@@ -15,6 +15,7 @@ import tsh.d94.app.server.apService.ayaan.AyaanConflictException;
 import tsh.d94.app.server.apService.cira.cql.CqlParseException;
 import tsh.d94.app.server.apService.cira.exception.CiraException;
 import tsh.d94.app.server.apService.docs.DocsException;
+import tsh.d94.app.server.apService.lifeMetric.LifeMetricException;
 import tsh.d94.app.server.apService.study.exception.StudyException;
 import tsh.d94.lib.core.interfaces.rest.ApiResponse;
 
@@ -35,6 +36,13 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(DocsException.class)
 	public ResponseEntity<ApiResponse<Void>> handleDocsException(DocsException e) {
 		log.warn("Docs error [{}]: {}", e.getCode().getCode(), e.getMessage());
+		return ResponseEntity.status(e.getCode().getStatus())
+			.body(ApiResponse.error(e.getCode().getCode(), e.getMessage()));
+	}
+
+	@ExceptionHandler(LifeMetricException.class)
+	public ResponseEntity<ApiResponse<Void>> handleLifeMetricException(LifeMetricException e) {
+		log.warn("LifeMetric error [{}]: {}", e.getCode().getCode(), e.getMessage());
 		return ResponseEntity.status(e.getCode().getStatus())
 			.body(ApiResponse.error(e.getCode().getCode(), e.getMessage()));
 	}

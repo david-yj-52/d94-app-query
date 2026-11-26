@@ -23,7 +23,9 @@ public enum ApiTokenScope {
 
 	STUDY("study", List.of("/api/v1/study")),
 
-	INTERFACE_TEST("interface-test", List.of("/api/v1/interface-tests"));
+	INTERFACE_TEST("interface-test", List.of("/api/v1/interface-tests")),
+
+	LIFE_METRIC("life-metric", List.of("/api/v1/life-metric"));
 
 	public static final String TOKEN_PREFIX = "d94_";
 
