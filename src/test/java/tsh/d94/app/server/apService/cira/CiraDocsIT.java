@@ -107,6 +107,13 @@ class CiraDocsIT {
 		assertThat(d2.lineage()).hasSize(3);
 		assertThat(folders.list(vaultId)).extracting(FolderResponse::name).contains("plan", "retro");
 
+		// 이슈 제목 변경 → 메인 노트 제목 동기화, 팀 노트의 [[옛 제목]] 도 치환
+		NoteResponse ref = notes.create(new NoteRequest("참조", "메인: [[" + after.title() + "]]", null, null, vaultId));
+		issues.updateIssue(issue.getId(), tsh.d94.app.server.apService.cira.dto.UpdateIssueRequest.builder().title("로그인 개선 v2").build());
+		assertThat(notes.get(main.id()).title()).isEqualTo(key + " 로그인 개선 v2");
+		assertThat(notes.get(ref.id()).content()).contains("[[" + key + " 로그인 개선 v2]]");
+		assertThat(notes.get(plan.id()).origin()).isEqualTo(key + " 로그인 개선 v2");
+
 		// 개발자(멤버)는 Team vault 를 보고, 관리자의 Private 노트는 못 본다
 		NoteResponse privateNote = notes.create(new NoteRequest("관리자 메모", "비밀", null, null));
 		TestContexts.login(dev.getEmail());
