@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import tsh.d94.app.server.apService.cira.automation.events.IssueAssignedEvent;
 import tsh.d94.app.server.apService.cira.automation.events.IssueCreatedEvent;
 import tsh.d94.app.server.apService.cira.automation.events.IssueStatusChangedEvent;
+import tsh.d94.app.server.apService.cira.automation.events.IssueTitleChangedEvent;
 import tsh.d94.app.server.apService.cira.dto.CreateIssueRequest;
 import tsh.d94.app.server.apService.cira.dto.IssueResponse;
 import tsh.d94.app.server.apService.docs.Docs;
@@ -115,6 +116,25 @@ public class CiraDocsService {
 			appendProgress(e.getIssueId(), "상태 변경: " + statusNm(e.getFromStatus()) + " → " + statusNm(e.getToStatus())
 				+ " (by " + userNm(e.getChangedBy()) + ")");
 		}
+	}
+
+	/** 이슈 제목 변경 → 메인 노트 제목 `{issueKey} {새 제목}` (다른 노트의 [[링크]] 도 치환). 그 제목이 이미 있으면 objId 앞 8자를 붙인다 */
+	@EventListener
+	public void onTitleChanged(IssueTitleChangedEvent e) {
+		if (!(e.getSource() instanceof IssueService)) {
+			return;
+		}
+		SnCiraIssueModel issue = issueAccess.findById(e.getIssueId());
+		access.mainNoteId(issue.getObjId()).flatMap(noteAccess::findByIdOptional).ifPresent(n -> {
+			String title = mainTitle(issue.getIssueKey(), issue.getTitle());
+			if (title.equals(n.getTitle())) {
+				return;
+			}
+			if (notes.titleTaken(n.getVaultId(), title)) {
+				title = mainTitle(issue.getIssueKey(), issue.getTitle() + " " + issue.getObjId().substring(0, 8));
+			}
+			notes.renameInternal(n, title);
+		});
 	}
 
 	@EventListener

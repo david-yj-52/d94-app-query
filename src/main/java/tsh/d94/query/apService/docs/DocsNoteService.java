@@ -103,6 +103,19 @@ public class DocsNoteService {
 		}
 		String title = req.title() == null ? n.getTitle() : Docs.name(req.title(), 500, FORBIDDEN, "제목");
 		String content = req.content() == null ? n.getContent() : req.content();
+		writeRenamed(n, title, content);
+		return toResponse(n);
+	}
+
+	/** 권한·version 검사 없이 제목만 바꾼다 (CIRA 이슈 제목 동기화). 링크 치환은 update 와 같다 */
+	@Transactional
+	public void renameInternal(SnDocsNoteModel n, String rawTitle) {
+		writeRenamed(n, Docs.name(rawTitle, 500, FORBIDDEN, "제목"), n.getContent());
+	}
+
+	/** 제목이 바뀌면 같은 vault 의 [[옛 제목]] 을 새 제목으로 고친 뒤 저장 */
+	private void writeRenamed(SnDocsNoteModel n, String title, String content) {
+		String id = n.getObjId();
 		String oldTitle = n.getTitle();
 		if (!title.equals(oldTitle)) {
 			requireFreeTitle(n.getVaultId(), title, id);
@@ -115,7 +128,6 @@ public class DocsNoteService {
 			content = DocsMarkdownIndexer.renameLinks(content, oldTitle, title); // 자기 자신 링크
 		}
 		write(n, title, content);
-		return toResponse(n);
 	}
 
 	@Transactional

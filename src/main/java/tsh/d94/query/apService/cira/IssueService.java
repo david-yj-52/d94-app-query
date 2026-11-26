@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import tsh.d94.app.server.apService.cira.automation.events.IssueAssignedEvent;
 import tsh.d94.app.server.apService.cira.automation.events.IssueCreatedEvent;
 import tsh.d94.app.server.apService.cira.automation.events.IssueStatusChangedEvent;
+import tsh.d94.app.server.apService.cira.automation.events.IssueTitleChangedEvent;
 import tsh.d94.app.server.apService.cira.dto.ChangeStatusRequest;
 import tsh.d94.app.server.apService.cira.dto.CreateIssueRequest;
 import tsh.d94.app.server.apService.cira.dto.IssueFilterRequest;
@@ -184,6 +185,7 @@ public class IssueService {
 		if (request.getTitle() != null && !request.getTitle().equals(issue.getTitle())) {
 			recordLog(issueId, "TITLE", issue.getTitle(), request.getTitle(), user.getObjId());
 			issue.setTitle(request.getTitle());
+			eventPublisher.publishEvent(new IssueTitleChangedEvent(this, issueId)); // Docs 메인 노트 제목 동기화
 		}
 		if (request.getContent() != null && !request.getContent().equals(issue.getContent())) {
 			recordLog(issueId, "CONTENT", issue.getContent(), request.getContent(), user.getObjId());

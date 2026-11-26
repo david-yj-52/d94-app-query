@@ -245,12 +245,12 @@ sequenceDiagram
 
 | 클래스 | 역할 |
 |---|---|
-| `apService/cira/CiraDocsService` | `IssueService` 가 쏜 `IssueCreated/StatusChanged/AssignedEvent` 를 같은 트랜잭션에서 받아: Task 생성 → 프로젝트 Team vault(없으면 생성) `task/{projectKey}/{issueKey}` 에 메인 노트(`{issueKey} {제목}`, frontmatter kind·project·issueKey·issueType·status) + `AUTO_CREATE_YN=Y` 슬롯 폴더, 상태·담당자 변경 → 최신 본문의 `## 진행 경과` 끝에 한 줄(버전 +1). 파생(기준정보 슬롯 또는 자유 폴더), Docs 노트 → Task 승격(메인 노트 origin), 기준정보 저장(프로젝트 ADMIN) |
+| `apService/cira/CiraDocsService` | `IssueService` 가 쏜 `IssueCreated/StatusChanged/AssignedEvent` 를 같은 트랜잭션에서 받아: Task 생성 → 프로젝트 Team vault(없으면 생성) `task/{projectKey}/{issueKey}` 에 메인 노트(`{issueKey} {제목}`, frontmatter kind·project·issueKey·issueType·status) + `AUTO_CREATE_YN=Y` 슬롯 폴더, 상태·담당자 변경 → 최신 본문의 `## 진행 경과` 끝에 한 줄(버전 +1), 이슈 제목 변경(`IssueTitleChangedEvent`) → 메인 노트 제목 `{issueKey} {새 제목}`(같은 vault 의 `[[링크]]` 치환, `DocsNoteService.renameInternal`). 파생(기준정보 슬롯 또는 자유 폴더), Docs 노트 → Task 승격(메인 노트 origin), 기준정보 저장(프로젝트 ADMIN) |
 | `data/orm/cira/ciraDocs/CiraDocsAccess` | `SN_CIRA_ISSUE_DOC`(MAIN 1개·DERIVED 여러 개, 노트 삭제 시 CASCADE)·`SN_CIRA_DOC_RULE` JdbcTemplate |
 | `interfaces/controller/cira/CiraDocsController` | `/api/v1/projects/{id}/doc-rules[/{issueTypeId}]`, `/issues/{issueId}/docs`(GET 조회·POST 온디맨드 메인 생성), `/issues/{issueId}/docs/derive`, `/docs/notes/{noteId}/promote-to-cira` |
 
 - 자동화(`AutomationEventListener`)가 직접 쏜 이벤트는 무시한다(로그인 사용자·트랜잭션 없음). 진행 경과 시각은 `LOG_TZ`.
-- 미구현: 이슈 제목 변경 → 메인 노트 제목 동기화, `[[D94-12]]` 이슈 키 링크 해석, 크로스 vault 링크(`TO_VAULT_ID`).
+- 미구현: `[[D94-12]]` 이슈 키 링크 해석, 크로스 vault 링크(`TO_VAULT_ID`).
 
 ### Life Metric (삶의 수치화)
 
