@@ -14,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import tsh.d94.app.server.apService.docs.DocsDtos.DeriveRequest;
 import tsh.d94.app.server.apService.docs.DocsDtos.LineageNode;
-import tsh.d94.app.server.apService.docs.DocsDtos.NoteRequest;
 import tsh.d94.app.server.apService.docs.DocsDtos.NoteResponse;
 import tsh.d94.app.server.apService.docs.DocsDtos.TaskResponse;
 import tsh.d94.app.server.data.orm.docs.docsIndex.DocsIndexAccess;
@@ -32,18 +31,28 @@ public class DocsEvolveService {
 
 	private final DocsNoteService notes;
 	private final DocsIndexAccess index;
+	private final DocsVaultService vaults;
 
 	/** 원본에서 갈라진 새 노트: frontmatter kind·stream·origin, 본문 첫 줄에 원본 인용. 원본과 같은 폴더 */
 	@Transactional
 	public NoteResponse derive(String id, DeriveRequest req) {
 		SnDocsNoteModel origin = notes.requireOwned(id);
 		String kind = kind(req.kind() == null ? "doc" : req.kind());
-		String stream = req.stream() == null || req.stream().isBlank() ? null
-			: Docs.name(req.stream(), 50, ":\"'[]|#", "트랙");
+		String stream = stream(req.stream());
+		String content = derivedContent(origin.getTitle(), kind, stream);
+		return notes.toResponse(notes.createIn(origin.getVaultId(), origin.getFolderId(), req.title(), content));
+	}
+
+	/** 파생 노트 본문 머리: frontmatter kind·stream·origin + 원본 인용. kind·stream 은 검증된 값 */
+	public static String derivedContent(String originTitle, String kind, String stream) {
 		String fm = "kind: " + kind + "\n" + (stream == null ? "" : "stream: " + stream + "\n")
-			+ "origin: \"[[" + origin.getTitle() + "]]\"";
-		String content = "---\n" + fm + "\n---\n> 원본: [[" + origin.getTitle() + "]]\n\n";
-		return notes.create(new NoteRequest(req.title(), content, origin.getFolderId(), null));
+			+ "origin: \"[[" + originTitle + "]]\"";
+		return "---\n" + fm + "\n---\n> 원본: [[" + originTitle + "]]\n\n";
+	}
+
+	/** 트랙 이름: 비었으면 null */
+	public static String stream(String raw) {
+		return raw == null || raw.isBlank() ? null : Docs.name(raw, 50, ":\"'[]|#", "트랙");
 	}
 
 	/** 승격: frontmatter kind 만 바꿔 저장 (버전 1건) */
@@ -54,9 +63,9 @@ public class DocsEvolveService {
 		return notes.toResponse(n);
 	}
 
-	public List<TaskResponse> tasks(String status, String tag, String stream, LocalDate dueBefore) {
-		return index.tasks(Docs.owner(), status, tag, stream, dueBefore).stream()
-			.map(t -> new TaskResponse(t.noteId(), t.noteTitle(), t.lineNo(), t.text(), t.status(), t.dueDt()))
+	public List<TaskResponse> tasks(String vaultId, String status, String tag, String stream, LocalDate dueBefore) {
+		return index.tasks(vaults.scope(vaultId), status, tag, stream, dueBefore).stream()
+			.map(t -> new TaskResponse(t.noteId(), t.vaultId(), t.noteTitle(), t.lineNo(), t.text(), t.status(), t.dueDt()))
 			.toList();
 	}
 
@@ -84,20 +93,19 @@ public class DocsEvolveService {
 		String[] lines = lines(n);
 		Matcher m = taskLine(lines, lineNo);
 		String title = m.group(4).replaceAll("📅\\s*\\d{4}-\\d{2}-\\d{2}", "").replaceAll("[\\[\\]|#]", "").trim();
-		NoteResponse created = notes.create(new NoteRequest(title,
-			"---\nkind: task\norigin: \"[[" + n.getTitle() + "]]\"\n---\n", n.getFolderId(), null));
+		NoteResponse created = notes.toResponse(notes.createIn(n.getVaultId(), n.getFolderId(), title,
+			"---\nkind: task\norigin: \"[[" + n.getTitle() + "]]\"\n---\n"));
 		lines[lineNo] = m.group(1) + m.group(2) + m.group(3) + "[[" + created.title() + "]]";
 		notes.write(n, n.getTitle(), String.join("\n", lines));
 		return created;
 	}
 
 	public List<LineageNode> lineage(String id) {
-		notes.requireOwned(id);
-		return index.lineage(Docs.owner(), id).stream()
+		return index.lineage(notes.requireOwned(id).getVaultId(), id).stream()
 			.map(r -> new LineageNode(r.id(), r.title(), r.kind(), r.stream(), r.originTitle())).toList();
 	}
 
-	private static String kind(String raw) {
+	public static String kind(String raw) {
 		String k = raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT);
 		if (!DocsMarkdownIndexer.KINDS.contains(k)) {
 			throw new DocsException(INVALID_REQUEST, "kind 는 idea·doc·task·knowledge 중 하나입니다.");

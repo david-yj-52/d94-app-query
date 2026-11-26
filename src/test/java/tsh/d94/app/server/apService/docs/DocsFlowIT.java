@@ -80,9 +80,9 @@ class DocsFlowIT {
 		assertThat(codeOf(catchThrowable(() -> notes.create(note("a|b", ""))))).isEqualTo(DocsException.Code.INVALID_REQUEST);
 
 		// 목록 필터
-		assertThat(notes.list(null, null, "doc", null, null, null)).extracting(NoteSummary::title).containsExactly("A");
-		assertThat(notes.list(null, "v2", null, null, null, null)).extracting(NoteSummary::title).containsExactly("B2");
-		assertThat(notes.list(null, null, null, null, "설계", null)).extracting(NoteSummary::title).containsExactly("A");
+		assertThat(notes.list(null, null, null, "doc", null, null, null)).extracting(NoteSummary::title).containsExactly("A");
+		assertThat(notes.list(null, null, "v2", null, null, null, null)).extracting(NoteSummary::title).containsExactly("B2");
+		assertThat(notes.list(null, null, null, null, null, "설계", null)).extracting(NoteSummary::title).containsExactly("A");
 
 		// 삭제하면 A 의 링크는 다시 없는 노트 링크
 		notes.delete(b.id());
@@ -102,14 +102,14 @@ class DocsFlowIT {
 			.isEqualTo(DocsException.Code.INVALID_MOVE);
 
 		NoteResponse n = notes.create(new NoteRequest("폴더 안 노트", "", design.id(), null));
-		assertThat(notes.list(design.id(), null, null, null, null, null)).hasSize(1);
-		assertThat(notes.list("", null, null, null, null, null)).isEmpty();
+		assertThat(notes.list(null, design.id(), null, null, null, null, null)).hasSize(1);
+		assertThat(notes.list(null, "", null, null, null, null, null)).isEmpty();
 
 		// 노트가 있으면 삭제 거부 → 옮기고 나면 삭제
 		assertThat(codeOf(catchThrowable(() -> folders.delete(design.id())))).isEqualTo(DocsException.Code.FOLDER_NOT_EMPTY);
 		notes.move(n.id(), new MoveNoteRequest(null));
 		folders.delete(design.id());
-		assertThat(folders.list()).extracting(FolderResponse::name).containsExactlyInAnyOrder("개발", "설계");
+		assertThat(folders.list(null)).extracting(FolderResponse::name).containsExactlyInAnyOrder("개발", "설계");
 	}
 
 	@Test
@@ -120,10 +120,10 @@ class DocsFlowIT {
 		TestContexts.login(CiraFixtures.uniqueEmail("other"));
 		assertThat(codeOf(catchThrowable(() -> notes.get(mine.id())))).isEqualTo(DocsException.Code.NOT_FOUND);
 		assertThat(codeOf(catchThrowable(() -> folders.delete(myFolder.id())))).isEqualTo(DocsException.Code.NOT_FOUND);
-		assertThat(notes.list(null, null, null, null, null, null)).isEmpty();
+		assertThat(notes.list(null, null, null, null, null, null, null)).isEmpty();
 		NoteResponse theirs = notes.create(note("같은 제목", "다른 사람 노트")); // 제목은 vault 마다 유일
 		assertThat(theirs.id()).isNotEqualTo(mine.id());
-		assertThat(notes.titles("같")).isEqualTo(List.of("같은 제목"));
+		assertThat(notes.titles(null, "같")).isEqualTo(List.of("같은 제목"));
 	}
 
 	@Test
@@ -144,15 +144,15 @@ class DocsFlowIT {
 		assertThat(dev.kind()).isEqualTo("doc");
 		assertThat(dev.stream()).isEqualTo("dev");
 		assertThat(dev.origin()).isEqualTo("아이디어");
-		assertThat(notes.list(null, null, null, null, null, "아이디어")).extracting(NoteSummary::title).containsExactly("개발 설계");
+		assertThat(notes.list(null, null, null, null, null, null, "아이디어")).extracting(NoteSummary::title).containsExactly("개발 설계");
 
 		// Task: frontmatter 3줄 뒤 줄 번호. 상태 변경은 그 줄만 고친다
-		List<DocsDtos.TaskResponse> tasks = evolve.tasks(null, null, null, null);
+		List<DocsDtos.TaskResponse> tasks = evolve.tasks(null, null, null, null, null);
 		assertThat(tasks).extracting(DocsDtos.TaskResponse::lineNo).containsExactly(4, 5); // 마감 있는 것이 먼저
 		assertThat(tasks.get(0).dueDt()).isEqualTo(java.time.LocalDate.of(2026, 12, 1));
 		NoteResponse afterCheck = evolve.setTaskStatus(idea.id(), 4, "done");
 		assertThat(afterCheck.content()).contains("- [x] 설계하기");
-		assertThat(evolve.tasks("done", null, null, null)).hasSize(1);
+		assertThat(evolve.tasks(null, "done", null, null, null)).hasSize(1);
 		assertThat(codeOf(catchThrowable(() -> evolve.setTaskStatus(idea.id(), 0, "done"))))
 			.isEqualTo(DocsException.Code.VERSION_CONFLICT); // frontmatter 줄은 체크박스가 아님
 

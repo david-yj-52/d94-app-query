@@ -28,24 +28,41 @@ public class DocsFolderService {
 
 	private final SnDocsFolderAccess folderAccess;
 	private final SnDocsNoteAccess noteAccess;
+	private final DocsVaultService vaults;
 
-	/** 없거나 남의 폴더면 404 */
+	/** 없거나 접근 못 하는 vault 의 폴더면 404 */
 	public SnDocsFolderModel requireOwned(String id) {
-		return folderAccess.findOwned(id, Docs.owner()).orElseThrow(() -> new DocsException(NOT_FOUND));
+		return folderAccess.findByIdOptional(id).filter(f -> vaults.canAccess(f.getVaultId()))
+			.orElseThrow(() -> new DocsException(NOT_FOUND));
 	}
 
-	public List<FolderResponse> list() {
-		return folderAccess.findByOwner(Docs.owner()).stream().map(FolderResponse::of).toList();
+	/** vaultId 생략·ALL = 통합 뷰 */
+	public List<FolderResponse> list(String vaultId) {
+		return folderAccess.findByVaults(vaults.scope(vaultId)).stream().map(FolderResponse::of).toList();
+	}
+
+	/** vault 안의 폴더 경로를 이름으로 찾거나 만든다(멱등). 권한 검사는 호출 쪽. 마지막 폴더 id */
+	@Transactional
+	public String ensurePath(String vaultId, String... names) {
+		String parentId = null;
+		for (String raw : names) {
+			String name = Docs.name(raw, 200, FORBIDDEN, "폴더 이름");
+			String pid = parentId;
+			parentId = folderAccess.findChild(vaultId, pid, name).orElseGet(() -> save(
+				Docs.base(SnDocsFolderModel.builder(), "CreateDocsFolder")
+					.ownerId(Docs.owner()).vaultId(vaultId).parentId(pid).name(name).sortOrder(0).build()))
+				.getObjId();
+		}
+		return parentId;
 	}
 
 	@Transactional
 	public FolderResponse create(FolderRequest req) {
 		String parentId = blankToNull(req.parentId());
-		if (parentId != null) {
-			requireOwned(parentId);
-		}
+		String vaultId = parentId != null ? requireOwned(parentId).getVaultId() : vaults.target(req.vaultId());
 		SnDocsFolderModel f = Docs.base(SnDocsFolderModel.builder(), "CreateDocsFolder")
 			.ownerId(Docs.owner())
+			.vaultId(vaultId)
 			.parentId(parentId)
 			.name(Docs.name(req.name(), 200, FORBIDDEN, "폴더 이름"))
 			.sortOrder(0)
@@ -65,7 +82,7 @@ public class DocsFolderService {
 		SnDocsFolderModel f = requireOwned(id);
 		String parentId = blankToNull(req.parentId());
 		if (parentId != null) {
-			Map<String, SnDocsFolderModel> all = folderAccess.findByOwner(Docs.owner()).stream()
+			Map<String, SnDocsFolderModel> all = folderAccess.findByVaults(List.of(f.getVaultId())).stream()
 				.collect(Collectors.toMap(SnDocsFolderModel::getObjId, Function.identity()));
 			if (!all.containsKey(parentId)) {
 				throw new DocsException(NOT_FOUND);

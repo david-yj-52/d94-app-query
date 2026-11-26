@@ -9,9 +9,7 @@ import tsh.d94.lib.core.data.orm.common.repo.BaseJpaRepository;
 @Repository
 public interface SnDocsNoteRepo extends BaseJpaRepository<SnDocsNoteModel, String> {
 
-	Optional<SnDocsNoteModel> findByObjIdAndOwnerId(String objId, String ownerId);
-
-	Optional<SnDocsNoteModel> findByOwnerIdAndTitle(String ownerId, String title);
+	Optional<SnDocsNoteModel> findByVaultIdAndTitle(String vaultId, String title);
 
 	long countByFolderId(String folderId);
 }

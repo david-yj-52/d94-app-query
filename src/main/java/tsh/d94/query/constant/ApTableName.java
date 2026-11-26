@@ -66,6 +66,7 @@ public class ApTableName {
 	// docs (Obsidian형 개인 vault)
 	public static final String SN_DOCS_FOLDER = "SN_DOCS_FOLDER";
 	public static final String SN_DOCS_NOTE = "SN_DOCS_NOTE";
+	public static final String SN_DOCS_VAULT = "SN_DOCS_VAULT";
 	// life_metric (삶의 수치화)
 	public static final String SN_LIFE_METRIC_TEMPLATE = "SN_LIFE_METRIC_TEMPLATE";
 	public static final String SN_LIFE_METRIC = "SN_LIFE_METRIC";
