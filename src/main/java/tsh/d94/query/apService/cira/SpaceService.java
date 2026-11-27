@@ -75,6 +75,12 @@ public class SpaceService {
 			new SaveSpace(blank(name) ? DEFAULT_NAME : name, null, null, presetTypeId, ownerId, (short)0), true);
 	}
 
+	/** 프로젝트 생성 직후 기본 공간 외 처음 공간들 (ProjectService) — 권한 검사 없음, 관리자 = 만든 사람 */
+	@Transactional
+	public SnCiraSpaceModel createInitial(String projectId, String name, String presetTypeId, String ownerId, short sortOrd) {
+		return createInternal(projectId, new SaveSpace(name, null, null, presetTypeId, ownerId, sortOrd), false);
+	}
+
 	@Transactional
 	public Space update(String spaceId, SaveSpace req) {
 		SnCiraSpaceModel s = guard.requireManager(guard.get(spaceId));
@@ -134,9 +140,16 @@ public class SpaceService {
 
 	private SnCiraSpaceModel createInternal(String projectId, SaveSpace req, boolean isDefault) {
 		String name = name(req.name());
-		String key = key(blank(req.key()) ? (isDefault ? "DEFAULT" : name) : req.key());
+		boolean autoKey = blank(req.key());
+		String key = key(autoKey ? (isDefault ? "DEFAULT" : name) : req.key());
 		if (taken(projectId, name, null)) {
 			throw new IllegalStateException("같은 이름의 작업 공간이 있습니다: " + name);
+		}
+		// 이름에서 만든 키는 겹치면 번호를 붙인다 (한글 이름은 모두 SPACE 가 되므로). 직접 준 키만 거절
+		String base = key;
+		for (int n = 2; autoKey && taken(projectId, null, key); n++) {
+			String suffix = "_" + n;
+			key = (base.length() + suffix.length() > 20 ? base.substring(0, 20 - suffix.length()) : base) + suffix;
 		}
 		if (taken(projectId, null, key)) {
 			throw new IllegalStateException("같은 키의 작업 공간이 있습니다: " + key);
