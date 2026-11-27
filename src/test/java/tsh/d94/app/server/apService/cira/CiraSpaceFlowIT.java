@@ -17,6 +17,8 @@ import tsh.d94.app.server.apService.cira.CiraDocsService.PromoteRequest;
 import tsh.d94.app.server.apService.cira.IssueService.FeatureNode;
 import tsh.d94.app.server.apService.cira.dto.AddStatusRequest;
 import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.Field;
+import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.PresetStatus;
+import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.SaveType;
 import tsh.d94.app.server.apService.cira.dto.CreateIssueRequest;
 import tsh.d94.app.server.apService.cira.dto.IssueResponse;
 import tsh.d94.app.server.apService.cira.dto.ProjectResponse;
@@ -82,7 +84,7 @@ class CiraSpaceFlowIT {
 		assertThat(statusNames(etc)).containsExactly("To Do", "In Progress", "Done");
 		assertThat(jdbc.queryForObject("select BOARD_TYPE from SN_CIRA_BOARD where SPACE_ID=?", String.class, hw.id())).isEqualTo("SCRUM");
 		assertThatThrownBy(() -> spaces.create(project.getId(), new SaveSpace("Hardware", "HW2", null, null, null, null)))
-			.isInstanceOf(IllegalStateException.class);
+			.isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
 
 		// 공간 관리자(dev)는 자기 공간만: 상태 추가·필드 세트(프리셋 필드도) 자유롭게, 기본 공간은 못 바꾼다
 		TestContexts.login(dev.getEmail());
@@ -108,8 +110,8 @@ class CiraSpaceFlowIT {
 			.isInstanceOf(IllegalArgumentException.class);
 
 		TestContexts.login(adminEmail);
-		assertThatThrownBy(() -> spaces.delete(hw.id())).isInstanceOf(IllegalStateException.class); // Task 남음
-		assertThatThrownBy(() -> spaces.delete(general.id())).isInstanceOf(IllegalStateException.class); // 기본 공간
+		assertThatThrownBy(() -> spaces.delete(hw.id())).isInstanceOf(org.springframework.web.server.ResponseStatusException.class); // Task 남음
+		assertThatThrownBy(() -> spaces.delete(general.id())).isInstanceOf(org.springframework.web.server.ResponseStatusException.class); // 기본 공간
 		spaces.delete(etc.id());
 		assertThat(jdbc.queryForObject("select count(*) from SN_CIRA_ISSUE_STATUS where SPACE_ID=? and USE_STAT_CD='Usable'",
 			Integer.class, etc.id())).isZero();
@@ -256,5 +258,32 @@ class CiraSpaceFlowIT {
 		req.setKey(req.getKey() + "X");
 		req.setSpaces(List.of(new SaveSpace("HW", null, null, null, null, null), new SaveSpace(" HW ", null, null, null, null, null)));
 		assertThatThrownBy(() -> projects.createProject(req)).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("겹칩니다");
+	}
+
+	@Test
+	void presetWorkflow_copiedToNewSpace_andValidated() {
+		String name = "HW-" + java.util.UUID.randomUUID().toString().substring(0, 6);
+		var preset = fields.createType(new SaveType(name, null, "SCRUM", List.of(
+			new PresetStatus("설계", "TODO"),
+			new PresetStatus("시제품 제작", "IN_PROGRESS"),
+			new PresetStatus("검증 완료", "DONE"))));
+		assertThat(preset.boardType()).isEqualTo("SCRUM");
+		assertThat(preset.statuses()).extracting(s -> s.name()).containsExactly("설계", "시제품 제작", "검증 완료");
+
+		Space sp = spaces.create(project.getId(), new SaveSpace("Hardware", null, null, preset.id(), null, null));
+		assertThat(jdbc.queryForList("select STATUS_NM from SN_CIRA_ISSUE_STATUS where SPACE_ID=? order by SORT_ORD", String.class, sp.id()))
+			.containsExactly("설계", "시제품 제작", "검증 완료");
+		assertThat(jdbc.queryForObject("select count(*) from SN_CIRA_ISSUE_TRANSITION where SPACE_ID=?", Integer.class, sp.id()))
+			.isEqualTo(5); // 이웃 앞뒤 4 + 처음 → 마지막 1
+		assertThat(jdbc.queryForObject("select BOARD_TYPE from SN_CIRA_BOARD where SPACE_ID=?", String.class, sp.id())).isEqualTo("SCRUM");
+
+		// 프리셋을 고쳐도 이미 만든 공간은 그대로
+		fields.updateType(preset.id(), new SaveType(name, null, "KANBAN", null));
+		assertThat(jdbc.queryForObject("select BOARD_TYPE from SN_CIRA_BOARD where SPACE_ID=?", String.class, sp.id())).isEqualTo("SCRUM");
+
+		assertThatThrownBy(() -> fields.updateType(preset.id(), new SaveType(name, null, null,
+			List.of(new PresetStatus("진행", "IN_PROGRESS"),
+				new PresetStatus("끝", "DONE")))))
+			.isInstanceOf(IllegalArgumentException.class).hasMessageContaining("첫 상태");
 	}
 }

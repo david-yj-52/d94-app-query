@@ -1,13 +1,17 @@
 package tsh.d94.app.server.apService.cira;
 
 import java.util.List;
+import java.util.Map;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import lombok.RequiredArgsConstructor;
 import tsh.d94.app.server.apService.cira.dto.SpaceDto.SaveSpace;
 import tsh.d94.app.server.apService.cira.dto.SpaceDto.Space;
+import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.PresetStatus;
 import tsh.d94.app.server.data.orm.cira.ciraBoard.SnCiraBoardAccess;
 import tsh.d94.app.server.data.orm.cira.ciraBoard.SnCiraBoardModel;
 import tsh.d94.app.server.data.orm.cira.ciraBoardColumn.SnCiraBoardColumnAccess;
@@ -87,14 +91,14 @@ public class SpaceService {
 		if (!blank(req.name())) {
 			String name = name(req.name());
 			if (!name.equals(s.getSpaceNm()) && taken(s.getProjectId(), name, null)) {
-				throw new IllegalStateException("같은 이름의 작업 공간이 있습니다: " + name);
+				throw conflict("같은 이름의 작업 공간이 있습니다: " + name);
 			}
 			s.setSpaceNm(name);
 		}
 		if (!blank(req.key())) {
 			String key = key(req.key());
 			if (!key.equals(s.getSpaceKey()) && taken(s.getProjectId(), null, key)) {
-				throw new IllegalStateException("같은 키의 작업 공간이 있습니다: " + key);
+				throw conflict("같은 키의 작업 공간이 있습니다: " + key);
 			}
 			s.setSpaceKey(key);
 		}
@@ -120,10 +124,10 @@ public class SpaceService {
 		SnCiraSpaceModel s = guard.get(spaceId);
 		requireProjectAdmin(s.getProjectId());
 		if (s.isDefault()) {
-			throw new IllegalStateException("기본 작업 공간은 삭제할 수 없습니다");
+			throw conflict("기본 작업 공간은 삭제할 수 없습니다");
 		}
 		if (issueAccess.countLiveBySpaceId(spaceId) > 0) {
-			throw new IllegalStateException("Task 가 남아 있는 작업 공간은 삭제할 수 없습니다");
+			throw conflict("Task 가 남아 있는 작업 공간은 삭제할 수 없습니다");
 		}
 		for (SnCiraBoardModel b : boardAccess.findBySpaceId(spaceId)) {
 			columnAccess.findByBoardIdOrderBySortOrd(b.getObjId()).forEach(c -> columnAccess.delete(c.getObjId()));
@@ -143,7 +147,7 @@ public class SpaceService {
 		boolean autoKey = blank(req.key());
 		String key = key(autoKey ? (isDefault ? "DEFAULT" : name) : req.key());
 		if (taken(projectId, name, null)) {
-			throw new IllegalStateException("같은 이름의 작업 공간이 있습니다: " + name);
+			throw conflict("같은 이름의 작업 공간이 있습니다: " + name);
 		}
 		// 이름에서 만든 키는 겹치면 번호를 붙인다 (한글 이름은 모두 SPACE 가 되므로). 직접 준 키만 거절
 		String base = key;
@@ -152,7 +156,7 @@ public class SpaceService {
 			key = (base.length() + suffix.length() > 20 ? base.substring(0, 20 - suffix.length()) : base) + suffix;
 		}
 		if (taken(projectId, null, key)) {
-			throw new IllegalStateException("같은 키의 작업 공간이 있습니다: " + key);
+			throw conflict("같은 키의 작업 공간이 있습니다: " + key);
 		}
 		String adminId = blank(req.adminUserId()) ? guard.currentUserId() : req.adminUserId();
 		requireProjectMember(projectId, adminId);
@@ -173,30 +177,33 @@ public class SpaceService {
 		return s;
 	}
 
+	/** 빈 공간: 3단계 + 칸반 */
+	private static final List<PresetStatus> EMPTY_SPACE_STATUSES = List.of(new PresetStatus("To Do", "TODO"),
+		new PresetStatus("In Progress", "IN_PROGRESS"), new PresetStatus("Done", "DONE"));
+	private static final Map<String, String> CATEGORY_COLOR = Map.of("TODO", "#DFE1E6", "IN_PROGRESS", "#0052CC", "DONE", "#00875A");
+
 	/**
-	 * 프리셋: 기본 4단계(To Do → In Progress → In Review → Done) + 프리셋 보드 유형.
-	 * 빈 공간: 3단계(To Do → In Progress → Done) + 칸반.
-	 * ponytail: 프리셋별 워크플로 정의는 없다(모든 프리셋이 같은 4단계). 필요해지면 SN_CIRA_PROJECT_TYPE 에 상태 프리셋 테이블을 붙인다.
+	 * 프리셋의 상태·보드 유형을 새 공간에 복사한다 (V670: 프리셋마다 상태 정의, 없으면 기본 4단계). 빈 공간은 3단계 + 칸반.
+	 * 전이: 이웃끼리 앞뒤 + 처음 → 마지막.
 	 */
 	private void initWorkflow(SnCiraSpaceModel space, String presetId) {
 		String p = space.getProjectId();
 		String sid = space.getObjId();
-		SnCiraIssueStatusModel todo = status(p, sid, "To Do", "TODO", "#DFE1E6", 1);
-		SnCiraIssueStatusModel prog = status(p, sid, "In Progress", "IN_PROGRESS", "#0052CC", 2);
-		SnCiraIssueStatusModel review = presetId == null ? null : status(p, sid, "In Review", "IN_PROGRESS", "#FF991F", 3);
-		SnCiraIssueStatusModel done = status(p, sid, "Done", "DONE", "#00875A", 4);
-		transition(p, sid, todo, prog);
-		transition(p, sid, todo, done);
-		transition(p, sid, prog, todo);
-		if (review != null) {
-			transition(p, sid, prog, review);
-			transition(p, sid, review, done);
-			transition(p, sid, review, prog);
-		} else {
-			transition(p, sid, prog, done);
-			transition(p, sid, done, prog);
+		CiraFieldAccess.ProjectType preset = presetId == null ? null : fieldAccess.type(TenantContext.get(), presetId);
+		List<PresetStatus> defs = preset == null ? EMPTY_SPACE_STATUSES : fieldService.presetStatuses(preset);
+		List<SnCiraIssueStatusModel> sts = new java.util.ArrayList<>();
+		for (int i = 0; i < defs.size(); i++) {
+			PresetStatus d = defs.get(i);
+			sts.add(status(p, sid, d.name(), d.category(), CATEGORY_COLOR.getOrDefault(d.category(), "#DFE1E6"), i + 1));
 		}
-		String boardType = presetId == null ? "KANBAN" : fieldAccess.boardType(presetId);
+		for (int i = 0; i + 1 < sts.size(); i++) {
+			transition(p, sid, sts.get(i), sts.get(i + 1));
+			transition(p, sid, sts.get(i + 1), sts.get(i));
+		}
+		if (sts.size() > 2) {
+			transition(p, sid, sts.get(0), sts.get(sts.size() - 1));
+		}
+		String boardType = preset == null ? "KANBAN" : preset.boardType();
 		SnCiraBoardModel board = SnCiraBoardModel.builder()
 			.projectId(p).spaceId(sid).boardNm(space.getSpaceNm() + " Board").boardType(boardType)
 			.srvId(ApplicationProperties.getApplicationServiceName()).tenant(TenantContext.get())
@@ -204,7 +211,7 @@ public class SpaceService {
 			.build();
 		boardAccess.save(board);
 		short ord = 1;
-		for (SnCiraIssueStatusModel st : review == null ? List.of(todo, prog, done) : List.of(todo, prog, review, done)) {
+		for (SnCiraIssueStatusModel st : sts) {
 			columnAccess.save(SnCiraBoardColumnModel.builder()
 				.boardId(board.getObjId()).statusId(st.getObjId()).columnNm(st.getStatusNm()).sortOrd(ord++)
 				.srvId(ApplicationProperties.getApplicationServiceName()).tenant(TenantContext.get())
@@ -273,5 +280,10 @@ public class SpaceService {
 
 	private static boolean blank(String s) {
 		return s == null || s.isBlank();
+	}
+
+	/** 사용자에게 사유를 보여줄 충돌 (409). IllegalStateException 은 전역에서 500 이다 */
+	private static ResponseStatusException conflict(String reason) {
+		return new ResponseStatusException(HttpStatus.CONFLICT, reason);
 	}
 }

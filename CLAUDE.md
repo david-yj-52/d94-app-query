@@ -219,7 +219,8 @@ sequenceDiagram
 - Feature: `Epic` 유형을 `Feature` 로 이름 변경(V650, 옛 Epic 이슈는 기본 공간 UNIT). `GET /projects/{id}/features?spaceId=` 트리(COMMON 최상위). 공통 Feature 는 기본 공간 워크플로를 쓰고 보드에 놓이지 않는다. 이슈 `FEATURE_ID` 로 연결.
 - Task 설명 단일 원본: 설명은 Docs 메인 노트에만. 생성 시 `content` → 메인 노트 본문 후 `SN_CIRA_ISSUE.CONTENT` 비움, 수정 시 `IssueContentChangedEvent` → 노트 본문(frontmatter·`## 진행 경과` 사이)만 교체, `GET /issues/{id}` 는 `CiraDocsService.attachMain` 으로 설명(`description`)·`mainNoteId` 를 채우고 옛 CONTENT 만 있는 Task 는 그때 노트로 이관. Team vault 노트 승격은 그 노트 자체가 MAIN. Ayaan `issueByKey` 도 메인 노트 설명. CQL `text ~` 는 제목 + 옛 CONTENT 만(메인 노트 본문 검색 미구현).
 - 산출물 규칙(`SN_CIRA_DOC_RULE`): 전사(`PROJECT_ID` null, 총괄 ADMIN) → `POST /projects/{id}/doc-rules/import` 로 프로젝트 공통 잠금 복사(`LOCKED_YN='Y'`, `SOURCE_RULE_ID`) → 공간 규칙(`SPACE_ID`). 저장은 범위·타입의 잠기지 않은 슬롯만 교체, 잠금·상위 규칙과 같은 폴더 이름 거절. Task 에 적용 = 프로젝트 공통 + 그 공간.
-- 미구현(위임): 프리셋별 워크플로 정의, 공간 간 Task 이동, 대시보드·CQL·스프린트의 공간 필터.
+- (V670) 프리셋은 기본 워크플로를 가진다: `SN_CIRA_PROJECT_TYPE.STATUSES`(jsonb `[{name, category}]`, null = 기본 4단계)·`BOARD_TYPE`(KANBAN|SCRUM). `SaveType(typeNm, descr, boardType, statuses)` — null 은 그대로. 첫 상태 TODO·DONE 하나 이상·2~10개·이름 중복 금지. 공간 생성 시 상태 복사, 전이는 이웃 앞뒤 + 처음 → 마지막(빈 공간 = 3단계 + 칸반). 공간 이름·키 중복, 기본 공간·Task 남은 공간 삭제는 409(`ResponseStatusException`, 사유 메시지).
+- 미구현(위임): 공간 간 Task 이동, 대시보드·CQL·스프린트의 공간 필터.
 - 테스트: `FeatureRulesTest`, `CiraSpaceMigrationIT`(V650 재실행 백필), `CiraSpaceFlowIT`(공간·Feature·Docs 단일 원본·산출물 3단계).
 
 ### PDF 학습 뷰어 (study)
