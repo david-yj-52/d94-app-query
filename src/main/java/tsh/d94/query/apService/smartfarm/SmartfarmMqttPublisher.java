@@ -36,10 +36,14 @@ public class SmartfarmMqttPublisher {
 			options.setConnectionTimeout(5);
 			options.setAutomaticReconnect(false);
 			client.connect(options);
-			MqttMessage message = new MqttMessage(("PUMP1_" + action).getBytes(StandardCharsets.UTF_8));
-			message.setQos(1);
-			message.setRetained(false);
-			client.publish("smartfarm/esp32/cmd", message);
+			try {
+				MqttMessage message = new MqttMessage(("PUMP1_" + action).getBytes(StandardCharsets.UTF_8));
+				message.setQos(1);
+				message.setRetained(false);
+				client.publish("smartfarm/esp32/cmd", message);
+			} finally {
+				if (client.isConnected()) client.disconnect();
+			}
 		} catch (Exception e) {
 			log.warn("Smartfarm MQTT publish failed", e);
 			throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Could not publish pump command");
