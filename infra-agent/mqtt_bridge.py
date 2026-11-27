@@ -1,6 +1,7 @@
 """ESP32 → infra 브리지. smartfarm/esp32/{id}/telemetry 를 구독해 /ingest/esp32-{id} 로 전달.
 
 env: INFRA_URL, INFRA_TOKEN (agent.py 와 같음), MQTT_HOST(기본 192.168.1.74), MQTT_PORT(1883),
+     MQTT_USERNAME/MQTT_PASSWORD (브로커는 익명 불가 — 읽기 전용 계정 d94-infra-bridge),
      MQTT_TOPIC(기본 smartfarm/esp32/+/telemetry), MIN_INTERVAL_SEC(장비당 최소 전송 간격, 기본 60)
 
 telemetry 본문(JSON) 예: {"free_heap": 182344, "rssi": -61, "uptime": 3600}
@@ -50,9 +51,17 @@ def on_message(_c, _u, msg):
         print("forward failed:", device, e, flush=True)
 
 
+def on_connect(cl, _u, _f, rc, _p):
+    print("mqtt connect:", rc, flush=True)  # 인증 실패면 "Not authorized"
+    if rc == 0:
+        cl.subscribe(os.environ.get("MQTT_TOPIC", "smartfarm/esp32/+/telemetry"))
+
+
 def main():
     c = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="d94-infra-bridge")
-    c.on_connect = lambda cl, *_: cl.subscribe(os.environ.get("MQTT_TOPIC", "smartfarm/esp32/+/telemetry"))
+    if os.environ.get("MQTT_USERNAME"):
+        c.username_pw_set(os.environ["MQTT_USERNAME"], os.environ.get("MQTT_PASSWORD"))
+    c.on_connect = on_connect
     c.on_message = on_message
     c.connect(os.environ.get("MQTT_HOST", "192.168.1.74"), int(os.environ.get("MQTT_PORT", "1883")))
     print("d94-infra-bridge listening", flush=True)
