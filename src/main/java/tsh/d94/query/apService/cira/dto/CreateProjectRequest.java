@@ -1,5 +1,7 @@
 package tsh.d94.app.server.apService.cira.dto;
 
+import java.util.List;
+
 import com.fasterxml.jackson.annotation.JsonAlias;
 
 import lombok.AllArgsConstructor;
@@ -21,5 +23,7 @@ public class CreateProjectRequest {
 	/** 프리셋 이름 (옛 클라이언트, presetTypeId 가 있으면 무시). 옛 이름 projectType */
 	@JsonAlias("projectType")
 	private String presetTypeNm;
-	private String defaultSpaceName; // 기본 작업 공간 이름 (없으면 General)
+	private String defaultSpaceName; // 기본 작업 공간 이름 (없으면 General). spaces 가 있으면 무시
+	/** 처음 만들 작업 공간들 (첫 번째 = 기본 공간). presetTypeId null = 빈 공간. 관리자는 만든 사람. 없으면 위 두 값으로 1개 */
+	private List<SpaceDto.SaveSpace> spaces;
 }

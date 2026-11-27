@@ -18,6 +18,7 @@ import tsh.d94.app.server.apService.cira.dto.UpdateProjectRequest;
 import tsh.d94.app.server.apService.cira.dto.UpdateTransitionsRequest;
 import tsh.d94.app.server.apService.cira.dto.WorkflowStatusResponse;
 import tsh.d94.app.server.apService.cira.dto.WorkflowTransitionResponse;
+import tsh.d94.app.server.apService.cira.dto.SpaceDto.SaveSpace;
 import tsh.d94.app.server.data.orm.cira.ciraIssueStatus.SnCiraIssueStatusAccess;
 import tsh.d94.app.server.data.orm.cira.ciraIssueStatus.SnCiraIssueStatusModel;
 import tsh.d94.app.server.data.orm.cira.ciraIssueTransition.SnCiraIssueTransitionAccess;
@@ -58,7 +59,7 @@ public class ProjectService {
 			throw new IllegalArgumentException("Project key already exists: " + request.getKey());
 		}
 
-		var preset = fieldService.resolvePreset(request.getPresetTypeId(), request.getPresetTypeNm());
+		List<SaveSpace> spaces = initialSpaces(request);
 		SnCiraProjectModel project = SnCiraProjectModel.builder()
 			.projectKey(request.getKey())
 			.projectNm(request.getName())
@@ -90,8 +91,13 @@ public class ProjectService {
 
 		projectMemberAccess.save(member);
 
-		// 프로젝트는 타입이 없다: 고른 프리셋은 기본 작업 공간에 한 번 복사될 뿐 (V650·V660)
-		spaceService.createDefault(project.getObjId(), request.getDefaultSpaceName(), preset.id(), owner.getObjId());
+		// 프로젝트는 타입이 없다: 처음 작업 공간들을 만들고, 고른 프리셋은 각 공간에 한 번 복사될 뿐 (V650·V660)
+		SaveSpace first = spaces.get(0);
+		spaceService.createDefault(project.getObjId(), first.name(), first.presetTypeId(), owner.getObjId());
+		for (int i = 1; i < spaces.size(); i++) {
+			SaveSpace s = spaces.get(i);
+			spaceService.createInitial(project.getObjId(), s.name(), s.presetTypeId(), owner.getObjId(), (short)i);
+		}
 
 		return mapToResponse(project);
 	}
@@ -423,6 +429,28 @@ public class ProjectService {
 			.toStatusId(model.getToStatusId())
 			.allowYn(model.getAllowYn())
 			.build();
+	}
+
+	private static final int MAX_INITIAL_SPACES = 10;
+
+	/** spaces 가 없으면 옛 요청 모양(defaultSpaceName + 프리셋)으로 1개. 이름 중복·개수는 여기서 400 */
+	private List<SaveSpace> initialSpaces(CreateProjectRequest request) {
+		List<SaveSpace> spaces = request.getSpaces();
+		if (spaces == null || spaces.isEmpty()) {
+			var preset = fieldService.resolvePreset(request.getPresetTypeId(), request.getPresetTypeNm());
+			return List.of(new SaveSpace(request.getDefaultSpaceName(), null, null, preset.id(), null, null));
+		}
+		if (spaces.size() > MAX_INITIAL_SPACES) {
+			throw new IllegalArgumentException("처음 만들 작업 공간은 " + MAX_INITIAL_SPACES + "개까지입니다");
+		}
+		java.util.Set<String> names = new java.util.HashSet<>();
+		for (SaveSpace s : spaces) {
+			String n = s.name() == null ? "" : s.name().trim();
+			if (!names.add(n.isEmpty() ? SpaceService.DEFAULT_NAME : n)) {
+				throw new IllegalArgumentException("작업 공간 이름이 겹칩니다: " + n);
+			}
+		}
+		return spaces;
 	}
 
 	private ProjectResponse mapToResponse(SnCiraProjectModel model) {

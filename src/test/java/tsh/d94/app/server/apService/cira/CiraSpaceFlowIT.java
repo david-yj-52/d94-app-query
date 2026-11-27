@@ -231,4 +231,30 @@ class CiraSpaceFlowIT {
 		r.setSortOrd((short)50);
 		return r;
 	}
+
+	@Test
+	void createProject_withInitialSpaces_firstIsDefault_presetsCopiedPerSpace() {
+		String scrum = fields.types().stream().filter(t -> t.typeNm().equals("SCRUM")).findFirst().orElseThrow().id();
+		var req = new tsh.d94.app.server.apService.cira.dto.CreateProjectRequest();
+		req.setKey("S" + java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase());
+		req.setName("스마트팜 PoC");
+		req.setSpaces(List.of(new SaveSpace("공통", null, null, null, null, null),
+			new SaveSpace("하드웨어", null, null, scrum, null, null),
+			new SaveSpace("소프트웨어", null, null, scrum, null, null)));
+		ProjectResponse p = projects.createProject(req);
+
+		List<Space> list = spaces.list(p.getId());
+		assertThat(list).extracting(Space::name).containsExactly("공통", "하드웨어", "소프트웨어");
+		assertThat(list).extracting(Space::isDefault).containsExactly(true, false, false);
+		assertThat(list).extracting(Space::presetTypeId).containsExactly(null, scrum, scrum);
+		assertThat(list).extracting(Space::key).doesNotHaveDuplicates(); // 한글 이름 → SPACE, SPACE_2
+		// 공간마다 자기 워크플로·보드: 빈 공간 3단계, 프리셋 4단계 + 스크럼 보드
+		assertThat(jdbc.queryForObject("select count(*) from SN_CIRA_ISSUE_STATUS where SPACE_ID=?", Integer.class, list.get(0).id())).isEqualTo(3);
+		assertThat(jdbc.queryForObject("select count(*) from SN_CIRA_ISSUE_STATUS where SPACE_ID=?", Integer.class, list.get(1).id())).isEqualTo(4);
+		assertThat(jdbc.queryForObject("select BOARD_TYPE from SN_CIRA_BOARD where SPACE_ID=?", String.class, list.get(2).id())).isEqualTo("SCRUM");
+
+		req.setKey(req.getKey() + "X");
+		req.setSpaces(List.of(new SaveSpace("HW", null, null, null, null, null), new SaveSpace(" HW ", null, null, null, null, null)));
+		assertThatThrownBy(() -> projects.createProject(req)).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("겹칩니다");
+	}
 }
