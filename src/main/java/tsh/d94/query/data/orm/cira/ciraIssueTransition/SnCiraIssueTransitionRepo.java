@@ -12,4 +12,7 @@ public interface SnCiraIssueTransitionRepo extends BaseJpaRepository<SnCiraIssue
 	List<SnCiraIssueTransitionModel> findByProjectId(String projectId);
 
 	List<SnCiraIssueTransitionModel> findByProjectIdAndFromStatusId(String projectId, String fromStatusId);
+
+	List<SnCiraIssueTransitionModel> findBySpaceId(String spaceId);
+
 }

@@ -58,4 +58,18 @@ public class SnCiraIssueAccess extends AbstractCrudService<SnCiraIssueModel, Str
 		return repo.findByIssueKeyAndDeletedAtIsNull(issueKey);
 	}
 
+
+	public long countLiveBySpaceId(String spaceId) {
+		return repo.countBySpaceIdAndDeletedAtIsNull(spaceId);
+	}
+
+	/** 삭제 안 된 Feature (FEATURE_SCOPE 가 있는 이슈) */
+	public List<SnCiraIssueModel> findFeatures(String projectId) {
+		return repo.findByProjectIdAndFeatureScopeIsNotNullAndDeletedAtIsNull(projectId);
+	}
+
+	public long countLiveByFeatureId(String featureId) {
+		return repo.countByFeatureIdAndDeletedAtIsNull(featureId);
+	}
+
 }

@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import tsh.d94.app.server.apService.cira.automation.events.IssueAssignedEvent;
+import tsh.d94.app.server.apService.cira.automation.events.IssueContentChangedEvent;
 import tsh.d94.app.server.apService.cira.automation.events.IssueCreatedEvent;
 import tsh.d94.app.server.apService.cira.automation.events.IssueStatusChangedEvent;
 import tsh.d94.app.server.apService.cira.automation.events.IssueTitleChangedEvent;
@@ -78,6 +79,7 @@ public class IssueService {
 	private final NotificationService notificationService;
 	private final ApplicationEventPublisher eventPublisher;
 	private final CiraFieldService fieldService;
+	private final SpaceGuard spaceGuard;
 
 	@Transactional
 	public IssueResponse createIssue(String projectId, CreateIssueRequest request) {
@@ -93,8 +95,14 @@ public class IssueService {
 			.findFirst()
 			.orElseThrow(() -> new IllegalArgumentException("User is not a member of the project"));
 
-		String statusId = resolveStatusId(projectId, request.getStatusId());
 		String issueTypeId = resolveIssueTypeId(request.getIssueTypeId());
+		// 공간·Feature 범위 (V630): COMMON Feature 만 공통 레이어(SPACE_ID null), 나머지는 공간 소유
+		String featureScope = FeatureRules.scope(isFeature(issueTypeId), request.getFeatureScope());
+		String spaceId = FeatureRules.COMMON.equals(featureScope) ? null
+			: spaceGuard.resolve(projectId, request.getSpaceId()).getObjId();
+		String featureId = blankToNull(request.getFeatureId());
+		validateFeatureLink(projectId, featureScope, spaceId, featureId);
+		String statusId = resolveStatusId(projectId, spaceId, request.getStatusId());
 		validateAssignee(projectId, request.getAssigneeId());
 
 		// Increment sequence and generate key
@@ -104,6 +112,9 @@ public class IssueService {
 
 		SnCiraIssueModel issue = SnCiraIssueModel.builder()
 			.projectId(projectId)
+			.spaceId(spaceId)
+			.featureScope(featureScope)
+			.featureId(featureId)
 			.sprintId(request.getSprintId())
 			.issueKey(issueKey)
 			.title(request.getTitle())
@@ -124,7 +135,7 @@ public class IssueService {
 			.build();
 
 		issueAccess.save(issue);
-		fieldService.applyValues(projectId, issue.getObjId(), request.getCustomFields(), true);
+		fieldService.applyValues(projectId, spaceId, issue.getObjId(), request.getCustomFields(), true);
 
 		// 자동화 이벤트 발행: 이슈 생성
 		eventPublisher.publishEvent(new IssueCreatedEvent(this, issue.getObjId(), projectId, reporter.getObjId()));
@@ -133,7 +144,7 @@ public class IssueService {
 		recordLog(issue.getObjId(), "Issue", null, "Created", reporter.getObjId());
 
 		// Initial Position: 이슈 상태와 매핑된 컬럼을 찾아 초기 위치 설정
-		String columnId = resolveColumnId(projectId, issue.getStatusId());
+		String columnId = spaceId == null ? null : resolveColumnId(spaceId, issue.getStatusId()); // 공통 Feature 는 보드에 없다
 		if (columnId != null) {
 			List<SnCiraIssuePositionModel> existing = issuePositionAccess.findByColumnIdOrderByRankStr(columnId);
 			String rankStr = existing.isEmpty()
@@ -154,7 +165,9 @@ public class IssueService {
 			issuePositionAccess.save(position);
 		}
 
-		return withValues(mapToResponse(issue));
+		IssueResponse created = withValues(mapToResponse(issue));
+		created.setContent(request.getContent()); // 저장은 Docs 메인 노트에만 (CiraDocsService 가 CONTENT 를 비운다)
+		return created;
 	}
 
 	public IssueResponse getIssue(String issueId) {
@@ -187,9 +200,20 @@ public class IssueService {
 			issue.setTitle(request.getTitle());
 			eventPublisher.publishEvent(new IssueTitleChangedEvent(this, issueId)); // Docs 메인 노트 제목 동기화
 		}
-		if (request.getContent() != null && !request.getContent().equals(issue.getContent())) {
-			recordLog(issueId, "CONTENT", issue.getContent(), request.getContent(), user.getObjId());
-			issue.setContent(request.getContent());
+		if (request.getContent() != null) {
+			// 설명의 원본은 Docs 메인 노트 (V630). 이력은 노트 버전이 남긴다
+			eventPublisher.publishEvent(new IssueContentChangedEvent(this, issueId, request.getContent()));
+		}
+		if (request.getFeatureId() != null) {
+			String featureId = blankToNull(request.getFeatureId());
+			if (!java.util.Objects.equals(featureId, issue.getFeatureId())) {
+				validateFeatureLink(issue.getProjectId(), issue.getFeatureScope(), issue.getSpaceId(), featureId);
+				if (featureId != null && featureId.equals(issueId)) {
+					throw new IllegalArgumentException("자기 자신에 연결할 수 없습니다");
+				}
+				recordLog(issueId, "FEATURE_ID", issue.getFeatureId(), featureId, user.getObjId());
+				issue.setFeatureId(featureId);
+			}
 		}
 
 		// assignee 변경 알림
@@ -210,7 +234,7 @@ public class IssueService {
 		}
 
 		if (request.getCustomFields() != null) {
-			fieldService.applyValues(issue.getProjectId(), issueId, request.getCustomFields(), false);
+			fieldService.applyValues(issue.getProjectId(), issue.getSpaceId(), issueId, request.getCustomFields(), false);
 		}
 
 		issueAccess.save(issue);
@@ -352,6 +376,12 @@ public class IssueService {
 			if (filter.getSprintId() != null) {
 				predicates.add(cb.equal(root.get("sprintId"), filter.getSprintId()));
 			}
+			if (filter.getSpaceId() != null) {
+				predicates.add(cb.equal(root.get("spaceId"), filter.getSpaceId()));
+			}
+			if (filter.getFeatureId() != null) {
+				predicates.add(cb.equal(root.get("featureId"), filter.getFeatureId()));
+			}
 			if (filter.getKeyword() != null && !filter.getKeyword().isEmpty()) {
 				predicates.add(cb.like(cb.lower(root.get("title")), "%" + filter.getKeyword().toLowerCase() + "%"));
 			}
@@ -378,6 +408,38 @@ public class IssueService {
 		return r;
 	}
 
+	/** 공통 Feature 와 그 아래 단위 Feature, 단독 단위 Feature. taskCount = 직접 연결된 Task·Feature 수 */
+	public record FeatureNode(IssueResponse feature, long taskCount, List<FeatureNode> children) {
+	}
+
+	/**
+	 * 2단계 Feature 트리. COMMON 이 항상 먼저(최상위), 그 아래 연결된 UNIT, 그다음 공통에 안 묶인 UNIT.
+	 * spaceId 를 주면 UNIT 은 그 공간 것만 (COMMON 은 공간과 무관하게 항상 포함).
+	 */
+	public List<FeatureNode> getFeatureTree(String projectId, String spaceId) {
+		spaceGuard.requireMember(projectId);
+		List<SnCiraIssueModel> all = issueAccess.findFeatures(projectId).stream()
+			.filter(f -> FeatureRules.COMMON.equals(f.getFeatureScope()) || spaceId == null || spaceId.equals(f.getSpaceId()))
+			.sorted(FeatureRules.commonFirst(SnCiraIssueModel::getFeatureScope,
+				java.util.Comparator.comparing(SnCiraIssueModel::getCreatedAt, java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder()))))
+			.toList();
+		Set<String> commonIds = all.stream().filter(f -> FeatureRules.COMMON.equals(f.getFeatureScope()))
+			.map(SnCiraIssueModel::getObjId).collect(Collectors.toSet());
+		List<FeatureNode> out = new ArrayList<>();
+		for (SnCiraIssueModel f : all) {
+			if (FeatureRules.COMMON.equals(f.getFeatureScope())) {
+				List<FeatureNode> units = all.stream()
+					.filter(u -> f.getObjId().equals(u.getFeatureId()))
+					.map(u -> new FeatureNode(mapToResponse(u), issueAccess.countLiveByFeatureId(u.getObjId()), List.of()))
+					.toList();
+				out.add(new FeatureNode(mapToResponse(f), issueAccess.countLiveByFeatureId(f.getObjId()), units));
+			} else if (f.getFeatureId() == null || !commonIds.contains(f.getFeatureId())) {
+				out.add(new FeatureNode(mapToResponse(f), issueAccess.countLiveByFeatureId(f.getObjId()), List.of()));
+			}
+		}
+		return out;
+	}
+
 	/** 선택 가능한 이슈 유형 (전역, 이름순) */
 	public List<IssueTypeResponse> getIssueTypes() {
 		return issueTypeAccess.findAllUsable().stream()
@@ -391,21 +453,42 @@ public class IssueService {
 			.collect(Collectors.toList());
 	}
 
-	/** 상태 미지정 → 프로젝트 워크플로우의 첫 상태(sortOrd 최소). 지정했으면 이 프로젝트의 상태인지 확인 */
-	private String resolveStatusId(String projectId, String statusId) {
-		List<SnCiraIssueStatusModel> statuses = statusAccess.findByProjectId(projectId).stream()
+	/** 상태 미지정 → 공간 워크플로의 첫 상태(sortOrd 최소). 지정했으면 이 공간의 상태인지 확인. 공통 레이어(null)는 기본 공간 워크플로 */
+	private String resolveStatusId(String projectId, String spaceId, String statusId) {
+		String sid = spaceGuard.resolve(projectId, spaceId).getObjId();
+		List<SnCiraIssueStatusModel> statuses = statusAccess.findBySpaceId(sid).stream()
 			.filter(s -> UseStatCd.Usable.equals(s.getUseStatCd()))
 			.collect(Collectors.toList());
 		if (statusId == null) {
 			return statuses.stream()
 				.min(java.util.Comparator.comparing(SnCiraIssueStatusModel::getSortOrd))
 				.map(SnCiraIssueStatusModel::getObjId)
-				.orElseThrow(() -> new IllegalArgumentException("프로젝트에 이슈 상태가 없습니다: " + projectId));
+				.orElseThrow(() -> new IllegalArgumentException("작업 공간에 이슈 상태가 없습니다: " + sid));
 		}
 		if (statuses.stream().noneMatch(s -> statusId.equals(s.getObjId()))) {
-			throw new IllegalArgumentException("이 프로젝트의 이슈 상태가 아닙니다: " + statusId);
+			throw new IllegalArgumentException("이 작업 공간의 이슈 상태가 아닙니다: " + statusId);
 		}
 		return statusId;
+	}
+
+	private boolean isFeature(String issueTypeId) {
+		return issueTypeAccess.findByIdOptional(issueTypeId)
+			.map(t -> FeatureRules.FEATURE_TYPE.equals(t.getTypeNm())).orElse(false);
+	}
+
+	/** featureId 가 가리키는 Feature 를 찾아 FeatureRules 로 검사 */
+	private void validateFeatureLink(String projectId, String scope, String spaceId, String featureId) {
+		if (featureId == null) {
+			return;
+		}
+		SnCiraIssueModel target = issueAccess.findByIdOptional(featureId)
+			.filter(f -> projectId.equals(f.getProjectId()) && f.getDeletedAt() == null)
+			.orElseThrow(() -> new IllegalArgumentException("이 프로젝트의 Feature 가 아닙니다: " + featureId));
+		FeatureRules.validateLink(scope, spaceId, target.getFeatureScope(), target.getSpaceId());
+	}
+
+	private static String blankToNull(String s) {
+		return s == null || s.isBlank() ? null : s;
 	}
 
 	/** 유형 미지정 → 기본 유형 Issue. 지정했으면 존재하는지 확인 */
@@ -430,10 +513,10 @@ public class IssueService {
 			.orElseThrow(() -> new IllegalArgumentException("담당자가 프로젝트 멤버가 아닙니다: " + assigneeId));
 	}
 
-	private String resolveColumnId(String projectId, String statusId) {
+	private String resolveColumnId(String spaceId, String statusId) {
 		if (statusId == null)
 			return null;
-		Set<String> boardIds = boardAccess.findByProjectId(projectId).stream()
+		Set<String> boardIds = boardAccess.findBySpaceId(spaceId).stream()
 			.map(SnCiraBoardModel::getObjId)
 			.collect(Collectors.toSet());
 		return boardColumnAccess.findByStatusId(statusId).stream()
@@ -491,6 +574,9 @@ public class IssueService {
 				.avatarUrl(assignee.getAvatarUrl())
 				.build() : null)
 			.projectId(model.getProjectId())
+			.spaceId(model.getSpaceId())
+			.featureScope(model.getFeatureScope())
+			.featureId(model.getFeatureId())
 			.sprintId(model.getSprintId())
 			.dueDt(model.getDueDt())
 			.startedAt(model.getStartedAt())

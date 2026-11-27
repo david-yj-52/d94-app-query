@@ -55,6 +55,12 @@ public class CiraFieldAccess {
 		return types(tenant).stream().filter(t -> t.id().equals(id)).findFirst().orElse(null);
 	}
 
+	/** 프리셋 기본 보드 유형 (V630). 없으면 KANBAN */
+	public String boardType(String typeId) {
+		return jdbc.queryForList("select BOARD_TYPE from SN_CIRA_PROJECT_TYPE where OBJ_ID=?", String.class, typeId).stream()
+			.findFirst().orElse("KANBAN");
+	}
+
 	public ProjectType typeByName(String tenant, String typeNm) {
 		return types(tenant).stream().filter(t -> t.typeNm().equals(typeNm)).findFirst().orElse(null);
 	}
@@ -99,17 +105,18 @@ public class CiraFieldAccess {
 		}
 	}
 
-	// ── 프로젝트 추가 필드 ─────────────────────────
+	// ── 공간 필드 세트 (V630: SN_CIRA_PROJECT_FIELD 는 공간 소유) ─────────────────────────
 
-	public List<String> projectFields(String projectId) {
-		return jdbc.queryForList("select FIELD_KEY from SN_CIRA_PROJECT_FIELD where PROJECT_ID=? order by SORT_ORD", String.class,
-			projectId);
+	public List<TypeField> spaceFields(String spaceId) {
+		return jdbc.query("select FIELD_KEY, DEFAULT_VISIBLE_YN from SN_CIRA_PROJECT_FIELD where SPACE_ID=? order by SORT_ORD",
+			(r, n) -> new TypeField(r.getString(1), !"N".equals(r.getString(2))), spaceId);
 	}
 
-	public void replaceProjectFields(String projectId, List<String> keys) {
-		jdbc.update("delete from SN_CIRA_PROJECT_FIELD where PROJECT_ID=?", projectId);
-		for (int i = 0; i < keys.size(); i++) {
-			jdbc.update("insert into SN_CIRA_PROJECT_FIELD(PROJECT_ID, FIELD_KEY, SORT_ORD) values(?,?,?)", projectId, keys.get(i), i + 1);
+	public void replaceSpaceFields(String projectId, String spaceId, List<TypeField> fields) {
+		jdbc.update("delete from SN_CIRA_PROJECT_FIELD where SPACE_ID=?", spaceId);
+		for (int i = 0; i < fields.size(); i++) {
+			jdbc.update("insert into SN_CIRA_PROJECT_FIELD(PROJECT_ID, SPACE_ID, FIELD_KEY, SORT_ORD, DEFAULT_VISIBLE_YN) values(?,?,?,?,?)",
+				projectId, spaceId, fields.get(i).fieldKey(), i + 1, fields.get(i).defaultVisible() ? "Y" : "N");
 		}
 	}
 
@@ -214,21 +221,27 @@ public class CiraFieldAccess {
 
 	// ── 사람별 컬럼 ─────────────────────────────
 
-	public ColumnPref columnPref(String userId, String projectId) {
-		List<ColumnPref> rows = jdbc.query("select FIELD_KEYS::text, KNOWN_KEYS::text from SN_CIRA_USER_COLUMN_PREF where USER_ID=? and PROJECT_ID=?",
-			(r, n) -> new ColumnPref(r.getString(1), r.getString(2)), userId, projectId);
+	public ColumnPref columnPref(String userId, String spaceId) {
+		List<ColumnPref> rows = jdbc.query("select FIELD_KEYS::text, KNOWN_KEYS::text from SN_CIRA_USER_COLUMN_PREF where USER_ID=? and SPACE_ID=?",
+			(r, n) -> new ColumnPref(r.getString(1), r.getString(2)), userId, spaceId);
 		return rows.isEmpty() ? null : rows.get(0);
 	}
 
-	public void saveColumnPref(String userId, String projectId, String fieldKeysJson, String knownKeysJson) {
+	public void saveColumnPref(String userId, String projectId, String spaceId, String fieldKeysJson, String knownKeysJson) {
 		jdbc.update("""
-			insert into SN_CIRA_USER_COLUMN_PREF(USER_ID, PROJECT_ID, FIELD_KEYS, KNOWN_KEYS) values(?,?,?::jsonb,?::jsonb)
-			on conflict (USER_ID, PROJECT_ID) do update set FIELD_KEYS=excluded.FIELD_KEYS, KNOWN_KEYS=excluded.KNOWN_KEYS, MODIFIED_AT=now()""",
-			userId, projectId, fieldKeysJson, knownKeysJson);
+			insert into SN_CIRA_USER_COLUMN_PREF(USER_ID, PROJECT_ID, SPACE_ID, FIELD_KEYS, KNOWN_KEYS) values(?,?,?,?::jsonb,?::jsonb)
+			on conflict (USER_ID, SPACE_ID) do update set FIELD_KEYS=excluded.FIELD_KEYS, KNOWN_KEYS=excluded.KNOWN_KEYS, MODIFIED_AT=now()""",
+			userId, projectId, spaceId, fieldKeysJson, knownKeysJson);
 	}
 
-	public void deleteColumnPref(String userId, String projectId) {
-		jdbc.update("delete from SN_CIRA_USER_COLUMN_PREF where USER_ID=? and PROJECT_ID=?", userId, projectId);
+	public void deleteColumnPref(String userId, String spaceId) {
+		jdbc.update("delete from SN_CIRA_USER_COLUMN_PREF where USER_ID=? and SPACE_ID=?", userId, spaceId);
+	}
+
+	/** 공간 삭제: 그 공간 소유 필드 세트·컬럼 설정 */
+	public void deleteSpaceRows(String spaceId) {
+		jdbc.update("delete from SN_CIRA_PROJECT_FIELD where SPACE_ID=?", spaceId);
+		jdbc.update("delete from SN_CIRA_USER_COLUMN_PREF where SPACE_ID=?", spaceId);
 	}
 
 	private CustomField cf(java.sql.ResultSet r, int n) throws java.sql.SQLException {

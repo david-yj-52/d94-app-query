@@ -18,4 +18,6 @@ public class IssueFilterRequest {
 	private String issueType;
 	private String sprintId;
 	private String keyword;
+	private String spaceId;
+	private String featureId;
 }

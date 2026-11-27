@@ -130,7 +130,7 @@ class CiraFieldLibraryMigrationIT {
 	@Test
 	@DisplayName("프로젝트 추가 필드의 전역 참조 → 그 프로젝트 필드 복사본, 값도 새 id 로")
 	void migrate_projectGlobalRef_becomesProjectCopy() {
-		List<String> added = keys("select FIELD_KEY from SN_CIRA_PROJECT_FIELD where PROJECT_ID=?", p2.getId());
+		List<String> added = keys("select FIELD_KEY from SN_CIRA_PROJECT_FIELD where PROJECT_ID=? and SPACE_ID is null" /* V630 이전 모양 행만 */, p2.getId());
 		assertThat(added).hasSize(1).doesNotContain("cf:" + globalG);
 		String copy = added.get(0).substring(3);
 		assertThat(jdbc.queryForMap("select PROJECT_ID, SOURCE_FIELD_ID from SN_CIRA_CUSTOM_FIELD where OBJ_ID=?", copy))
@@ -141,7 +141,7 @@ class CiraFieldLibraryMigrationIT {
 	@Test
 	@DisplayName("세트에도 있던(가려져 있던) 프로젝트 추가 필드 참조는 지우기만 한다")
 	void migrate_shadowedProjectRef_removed() {
-		assertThat(keys("select FIELD_KEY from SN_CIRA_PROJECT_FIELD where PROJECT_ID=?", p1.getId())).isEmpty();
+		assertThat(keys("select FIELD_KEY from SN_CIRA_PROJECT_FIELD where PROJECT_ID=? and SPACE_ID is null" /* V630 이전 모양 행만 */, p1.getId())).isEmpty();
 	}
 
 	@Test

@@ -10,4 +10,6 @@ import tsh.d94.lib.core.data.orm.common.repo.BaseJpaRepository;
 public interface SnCiraBoardRepo extends BaseJpaRepository<SnCiraBoardModel, String> {
 
 	List<SnCiraBoardModel> findByProjectId(String projectId);
+
+	List<SnCiraBoardModel> findBySpaceId(String spaceId);
 }

@@ -10,9 +10,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import tsh.d94.app.server.apService.cira.CiraDocsService;
 import tsh.d94.app.server.apService.cira.IssueService;
 import tsh.d94.app.server.apService.cira.dto.ChangeStatusRequest;
 import tsh.d94.app.server.apService.cira.dto.CreateIssueRequest;
@@ -32,6 +34,7 @@ import lombok.RequiredArgsConstructor;
 public class IssueController {
 
 	private final IssueService issueService;
+	private final CiraDocsService ciraDocsService;
 
 	@PostMapping("/projects/{projectId}/issues")
 	public ApiResponse<IssueResponse> createIssue(
@@ -52,7 +55,8 @@ public class IssueController {
 
 	@GetMapping("/issues/{issueId}")
 	public ApiResponse<IssueResponse> getIssue(@PathVariable String issueId) {
-		return ApiResponse.ok(issueService.getIssue(issueId));
+		// 설명 = Docs 메인 노트 (레거시 CONTENT 는 이때 노트로 이관)
+		return ApiResponse.ok(ciraDocsService.attachMain(issueService.getIssue(issueId)));
 	}
 
 	@PutMapping("/issues/{issueId}")
@@ -80,6 +84,13 @@ public class IssueController {
 	@GetMapping("/issues/{issueId}/available-transitions")
 	public ApiResponse<List<IssueStatusResponse>> getAvailableTransitions(@PathVariable String issueId) {
 		return ApiResponse.ok(issueService.getAvailableTransitions(issueId));
+	}
+
+	/** 2단계 Feature 트리 — COMMON 이 항상 먼저. spaceId 를 주면 UNIT 은 그 공간 것만 */
+	@GetMapping("/projects/{projectId}/features")
+	public ApiResponse<List<IssueService.FeatureNode>> features(@PathVariable String projectId,
+		@RequestParam(required = false) String spaceId) {
+		return ApiResponse.ok(issueService.getFeatureTree(projectId, spaceId));
 	}
 
 	/** 이슈 생성 화면의 유형 선택용 (전역 목록) */

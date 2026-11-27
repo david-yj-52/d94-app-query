@@ -29,6 +29,9 @@ public class SnCiraIssueTransitionModel extends BaseModel {
 	@Column(name = "PROJECT_ID", length = 100)
 	private String projectId;
 
+	@Column(name = "SPACE_ID", length = 100)
+	private String spaceId;
+
 	@Column(name = "FROM_STATUS_ID", length = 100)
 	private String fromStatusId;
 

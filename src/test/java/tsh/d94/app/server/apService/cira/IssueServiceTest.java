@@ -98,8 +98,13 @@ class IssueServiceTest {
 	private ApplicationEventPublisher eventPublisher;
 	@Mock
 	private CiraFieldService fieldService;
+	@Mock
+	private SpaceGuard spaceGuard;
 	@InjectMocks
 	private IssueService issueService;
+
+	/** V630: 공간 미지정 → 기본 공간. 상태·보드는 공간 기준으로 찾는다 */
+	private static final String SPACE_ID = "space-1";
 
 	private SnCiraProjectModel project;
 
@@ -114,6 +119,10 @@ class IssueServiceTest {
 		given(issueTypeAccess.findByIdOptional(any())).willReturn(Optional.empty());
 		given(statusAccess.findByIdOptional(any())).willReturn(Optional.empty());
 		memberAs("MEMBER");
+		tsh.d94.app.server.data.orm.cira.ciraSpace.SnCiraSpaceModel space = new tsh.d94.app.server.data.orm.cira.ciraSpace.SnCiraSpaceModel();
+		org.springframework.test.util.ReflectionTestUtils.setField(space, "objId", SPACE_ID);
+		space.setProjectId(PROJECT_ID);
+		given(spaceGuard.resolve(eq(PROJECT_ID), any())).willReturn(space);
 
 		project = new SnCiraProjectModel();
 		org.springframework.test.util.ReflectionTestUtils.setField(project, "objId", PROJECT_ID);
@@ -176,7 +185,7 @@ class IssueServiceTest {
 			SnCiraIssueStatusModel done = status(DONE, "Done");
 			done.setSortOrd((short)4);
 			done.setUseStatCd(tsh.d94.lib.core.data.constant.UseStatCd.Usable);
-			given(statusAccess.findByProjectId(PROJECT_ID)).willReturn(List.of(done, todo));
+			given(statusAccess.findBySpaceId(SPACE_ID)).willReturn(List.of(done, todo));
 			tsh.d94.app.server.data.orm.cira.ciraCiraIssueType.SnCiraCiraIssueTypeModel task =
 				new tsh.d94.app.server.data.orm.cira.ciraCiraIssueType.SnCiraCiraIssueTypeModel();
 			org.springframework.test.util.ReflectionTestUtils.setField(task, "objId", "type-task");
@@ -272,7 +281,7 @@ class IssueServiceTest {
 		void placesOnMappedColumn() {
 			SnCiraBoardModel board = new SnCiraBoardModel();
 			org.springframework.test.util.ReflectionTestUtils.setField(board, "objId", "board-1");
-			given(boardAccess.findByProjectId(PROJECT_ID)).willReturn(List.of(board));
+			given(boardAccess.findBySpaceId(SPACE_ID)).willReturn(List.of(board));
 			SnCiraBoardColumnModel col = new SnCiraBoardColumnModel();
 			org.springframework.test.util.ReflectionTestUtils.setField(col, "objId", "col-todo");
 			col.setBoardId("board-1");

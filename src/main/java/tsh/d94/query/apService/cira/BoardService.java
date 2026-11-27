@@ -55,13 +55,16 @@ public class BoardService {
 	private final SnCiraCiraIssueTypeAccess issueTypeAccess;
 	private final GsUserAccess userAccess;
 	private final SnCiraProjectMemberAccess projectMemberAccess;
+	private final SpaceGuard spaceGuard;
 
 	@Transactional
 	public BoardResponse createBoard(String projectId, CreateBoardRequest request) {
-		requireProjectMember(projectId);
+		// 보드/뷰는 공간 관리 항목 (V630): 프로젝트 ADMIN 또는 공간 관리자
+		String spaceId = spaceGuard.requireManager(spaceGuard.resolve(projectId, request.getSpaceId())).getObjId();
 
 		SnCiraBoardModel board = SnCiraBoardModel.builder()
 			.projectId(projectId)
+			.spaceId(spaceId)
 			.boardNm(request.getBoardNm())
 			.boardType(request.getBoardType() != null ? request.getBoardType() : "KANBAN")
 			.srvId(ApplicationProperties.getApplicationServiceName())
@@ -77,8 +80,13 @@ public class BoardService {
 	}
 
 	public List<BoardResponse> listBoards(String projectId) {
+		return listBoards(projectId, null);
+	}
+
+	/** spaceId null = 기본 공간 */
+	public List<BoardResponse> listBoards(String projectId, String spaceId) {
 		requireProjectMember(projectId);
-		return boardAccess.findByProjectId(projectId).stream()
+		return boardAccess.findBySpaceId(spaceGuard.resolve(projectId, spaceId).getObjId()).stream()
 			.filter(b -> b.getUseStatCd() == UseStatCd.Usable)
 			.map(b -> {
 				int colCount = (int)boardColumnAccess.findByBoardIdOrderBySortOrd(b.getObjId()).stream()
@@ -98,7 +106,7 @@ public class BoardService {
 	@Transactional
 	public BoardResponse updateBoard(String boardId, UpdateBoardRequest request) {
 		SnCiraBoardModel board = boardAccess.findById(boardId);
-		requireProjectMember(board.getProjectId());
+		requireBoardManager(board);
 
 		if (request.getBoardNm() != null) {
 			board.setBoardNm(request.getBoardNm());
@@ -114,19 +122,22 @@ public class BoardService {
 	@Transactional
 	public void deleteBoard(String boardId) {
 		SnCiraBoardModel board = boardAccess.findById(boardId);
-		requireProjectMember(board.getProjectId());
+		requireBoardManager(board);
 		boardAccess.delete(boardId);
 	}
 
 	@Transactional
 	public BoardColumnResponse addColumn(String boardId, CreateBoardColumnRequest request) {
 		SnCiraBoardModel board = boardAccess.findById(boardId);
-		requireProjectMember(board.getProjectId());
+		requireBoardManager(board);
 
 		List<SnCiraBoardColumnModel> existing = boardColumnAccess.findByBoardIdOrderBySortOrd(boardId).stream()
 			.filter(c -> c.getUseStatCd() == UseStatCd.Usable)
 			.collect(Collectors.toList());
 		short nextOrd = existing.isEmpty() ? 1 : (short)(existing.get(existing.size() - 1).getSortOrd() + 1);
+		statusAccess.findByIdOptional(request.getStatusId())
+			.filter(st -> java.util.Objects.equals(st.getSpaceId(), board.getSpaceId()))
+			.orElseThrow(() -> new IllegalArgumentException("이 보드 작업 공간의 상태가 아닙니다: " + request.getStatusId()));
 
 		SnCiraBoardColumnModel column = SnCiraBoardColumnModel.builder()
 			.boardId(boardId)
@@ -154,6 +165,7 @@ public class BoardService {
 		if (!column.getBoardId().equals(boardId)) {
 			throw new CiraException(ErrorCode.BOARD_COLUMN_NOT_FOUND);
 		}
+		requireBoardManager(boardAccess.findById(boardId));
 		SnCiraBoardModel board = boardAccess.findById(boardId);
 		requireProjectMember(board.getProjectId());
 
@@ -174,6 +186,7 @@ public class BoardService {
 		if (!column.getBoardId().equals(boardId)) {
 			throw new CiraException(ErrorCode.BOARD_COLUMN_NOT_FOUND);
 		}
+		requireBoardManager(boardAccess.findById(boardId));
 		SnCiraBoardModel board = boardAccess.findById(boardId);
 		requireProjectMember(board.getProjectId());
 		boardColumnAccess.delete(columnId);
@@ -262,6 +275,7 @@ public class BoardService {
 		return BoardDetailResponse.builder()
 			.id(board.getObjId())
 			.projectId(board.getProjectId())
+			.spaceId(board.getSpaceId())
 			.boardNm(board.getBoardNm())
 			.boardType(board.getBoardType())
 			.columns(columnResponses)
@@ -396,6 +410,7 @@ public class BoardService {
 		return BoardResponse.builder()
 			.id(board.getObjId())
 			.projectId(board.getProjectId())
+			.spaceId(board.getSpaceId())
 			.boardNm(board.getBoardNm())
 			.boardType(board.getBoardType())
 			.columnCount(colCount)
@@ -418,5 +433,10 @@ public class BoardService {
 			.sortOrd(col.getSortOrd())
 			.issues(issues)
 			.build();
+	}
+
+	/** 공간 소유 보드 수정: 프로젝트 ADMIN 또는 그 공간 관리자 */
+	private void requireBoardManager(SnCiraBoardModel board) {
+		spaceGuard.requireManager(spaceGuard.resolve(board.getProjectId(), board.getSpaceId()));
 	}
 }

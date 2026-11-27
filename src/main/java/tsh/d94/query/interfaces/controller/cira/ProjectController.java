@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -100,16 +101,18 @@ public class ProjectController {
 	// ── 워크플로우 관리 ──────────────────────────────────────────────────────
 
 	@GetMapping("/{projectId}/workflow/statuses")
-	public ApiResponse<List<WorkflowStatusResponse>> getWorkflowStatuses(@PathVariable String projectId) {
-		return ApiResponse.ok(projectService.getWorkflowStatuses(projectId));
+	public ApiResponse<List<WorkflowStatusResponse>> getWorkflowStatuses(@PathVariable String projectId,
+		@RequestParam(required = false) String spaceId) {
+		return ApiResponse.ok(projectService.getWorkflowStatuses(projectId, spaceId));
 	}
 
 	@PostMapping("/{projectId}/workflow/statuses")
 	public ApiResponse<WorkflowStatusResponse> addWorkflowStatus(
 		@PathVariable String projectId,
+		@RequestParam(required = false) String spaceId,
 		@RequestBody AddStatusRequest request
 	) {
-		return ApiResponse.ok(projectService.addWorkflowStatus(projectId, request));
+		return ApiResponse.ok(projectService.addWorkflowStatus(projectId, spaceId, request));
 	}
 
 	@DeleteMapping("/{projectId}/workflow/statuses/{statusId}")
@@ -122,15 +125,17 @@ public class ProjectController {
 	}
 
 	@GetMapping("/{projectId}/workflow/transitions")
-	public ApiResponse<List<WorkflowTransitionResponse>> getWorkflowTransitions(@PathVariable String projectId) {
-		return ApiResponse.ok(projectService.getWorkflowTransitions(projectId));
+	public ApiResponse<List<WorkflowTransitionResponse>> getWorkflowTransitions(@PathVariable String projectId,
+		@RequestParam(required = false) String spaceId) {
+		return ApiResponse.ok(projectService.getWorkflowTransitions(projectId, spaceId));
 	}
 
 	@PutMapping("/{projectId}/workflow/transitions")
 	public ApiResponse<List<WorkflowTransitionResponse>> updateWorkflowTransitions(
 		@PathVariable String projectId,
+		@RequestParam(required = false) String spaceId,
 		@RequestBody UpdateTransitionsRequest request
 	) {
-		return ApiResponse.ok(projectService.updateWorkflowTransitions(projectId, request));
+		return ApiResponse.ok(projectService.updateWorkflowTransitions(projectId, spaceId, request));
 	}
 }

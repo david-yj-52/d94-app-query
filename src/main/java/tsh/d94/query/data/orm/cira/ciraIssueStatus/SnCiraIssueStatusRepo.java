@@ -18,4 +18,9 @@ public interface SnCiraIssueStatusRepo extends BaseJpaRepository<SnCiraIssueStat
 
 	List<SnCiraIssueStatusModel> findByCategory(String category);
 
+
+	List<SnCiraIssueStatusModel> findBySpaceIdOrderBySortOrd(String spaceId);
+
+	Optional<SnCiraIssueStatusModel> findBySpaceIdAndStatusNm(String spaceId, String statusNm);
+
 }
