@@ -167,3 +167,9 @@ messaging:
 server:
   servlet:
     context-path: /tsh
+
+smartfarm:
+  mqtt:
+    uri: ${SMARTFARM_MQTT_URI:}
+    username: ${SMARTFARM_MQTT_USERNAME:}
+    password: ${SMARTFARM_MQTT_PASSWORD:}

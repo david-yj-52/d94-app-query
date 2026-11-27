@@ -41,6 +41,10 @@ services:
       KAFKA_ENABLE: ${KAFKA_ENABLE:-false}
       RABBITMQ_ENABLE: ${RABBITMQ_ENABLE:-false}
 
+      SMARTFARM_MQTT_URI: ${SMARTFARM_MQTT_URI:-}
+      SMARTFARM_MQTT_USERNAME: ${SMARTFARM_MQTT_USERNAME:-}
+      SMARTFARM_MQTT_PASSWORD: ${SMARTFARM_MQTT_PASSWORD:-}
+
       # Eureka 등록 → cloud-gateway 가 lb://d94-query 로 호출
       EUREKA_ENABLED: ${EUREKA_ENABLED:-true}
       EUREKA_URL: ${EUREKA_URL:-http://eureka-cloud-eureka-1:8761/eureka/}
