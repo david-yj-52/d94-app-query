@@ -199,14 +199,14 @@ sequenceDiagram
 | `interfaces/controller/cira/CiraFieldController` | `/api/v1/cira/{field-catalog,project-types,custom-fields}`(쓰기 ADMIN), `/api/v1/projects/{id}/{fields,custom-fields,column-pref}`(쓰기 프로젝트 ADMIN, 컬럼은 본인) |
 
 - 프로젝트는 `PROJECT_TYPE_ID` 로 타입을 참조한다. `PROJECT_TYPE` 문자열은 이름 사본(타입 이름 변경 시 함께 갱신). 기준정보 키 `cira.project.types` 는 없어졌다.
-- (V630) 새 프로젝트는 고른 타입을 프리셋으로 기본 작업 공간 1개를 만든다(보드 유형도 프리셋 `BOARD_TYPE`). Task 기본 세부 유형은 `Issue`(V590 에서 `Task` 이름 변경).
+- (V650) 새 프로젝트는 고른 타입을 프리셋으로 기본 작업 공간 1개를 만든다(보드 유형도 프리셋 `BOARD_TYPE`). Task 기본 세부 유형은 `Issue`(V590 에서 `Task` 이름 변경).
 - 사용자 정의 필드 소속(V600): 전역(`PROJECT_ID`·`PROJECT_TYPE_ID` null) · 타입(`PROJECT_TYPE_ID`) · 프로젝트(`PROJECT_ID`). 전역·타입 필드는 라이브러리이고, 가져가면 **복사본**(`SOURCE_FIELD_ID`=원본, FK 없음)이 생겨 원본 수정·삭제와 무관하다. 타입 세트에는 `sys:` 와 그 타입의 타입 필드만.
 - 프로젝트 필드 생성·가져오기(`/projects/{id}/custom-fields[/import]`, `/field-library`)는 프로젝트 멤버, 수정·삭제는 `CREATED_BY` 본인 또는 프로젝트 ADMIN.
 - 테스트: `CiraFieldIT`, `CiraFieldLibraryMigrationIT`(V600 참조 → 복사 이관).
 
 ### CIRA 작업 공간(Space) · 2단계 Feature · 산출물 규칙 3단계
 
-설계: DOCS 노트 "CIRA 작업 공간(Space) · Feature · Docs 중심 개편 설계" → "상세 디자인" → "구현 계획" (테이블 `V630`)
+설계: DOCS 노트 "CIRA 작업 공간(Space) · Feature · Docs 중심 개편 설계" → "상세 디자인" → "구현 계획" (테이블 `V650`)
 
 | 클래스 | 역할 |
 |---|---|
@@ -216,11 +216,11 @@ sequenceDiagram
 | `interfaces/controller/cira/SpaceController` | `/projects/{id}/spaces`, `/spaces/{spaceId}`, `/spaces/{spaceId}/{statuses,transitions,boards,fields,custom-fields[/import],column-pref,doc-rules[/{issueTypeId}]}`, `/cira/doc-rules[/{issueTypeId}]`(쓰기 ADMIN) |
 
 - 상태·전이·보드·필드 세트(`SN_CIRA_PROJECT_FIELD`)·컬럼 설정은 **공간 소유**(`SPACE_ID`). 기존 `/projects/{id}/...` 는 `?spaceId=`(없으면 기본 공간)로 하위 호환. 유효 필드 = 고정 → 공간 세트(타입 세트 상속·"타입 필드 끄기 불가" 폐지). 프로젝트 생성 시 고른 타입 = 기본 공간 프리셋(`defaultSpaceName`, 없으면 General).
-- Feature: `Epic` 유형을 `Feature` 로 이름 변경(V630, 옛 Epic 이슈는 기본 공간 UNIT). `GET /projects/{id}/features?spaceId=` 트리(COMMON 최상위). 공통 Feature 는 기본 공간 워크플로를 쓰고 보드에 놓이지 않는다. 이슈 `FEATURE_ID` 로 연결.
+- Feature: `Epic` 유형을 `Feature` 로 이름 변경(V650, 옛 Epic 이슈는 기본 공간 UNIT). `GET /projects/{id}/features?spaceId=` 트리(COMMON 최상위). 공통 Feature 는 기본 공간 워크플로를 쓰고 보드에 놓이지 않는다. 이슈 `FEATURE_ID` 로 연결.
 - Task 설명 단일 원본: 설명은 Docs 메인 노트에만. 생성 시 `content` → 메인 노트 본문 후 `SN_CIRA_ISSUE.CONTENT` 비움, 수정 시 `IssueContentChangedEvent` → 노트 본문(frontmatter·`## 진행 경과` 사이)만 교체, `GET /issues/{id}` 는 `CiraDocsService.attachMain` 으로 설명(`description`)·`mainNoteId` 를 채우고 옛 CONTENT 만 있는 Task 는 그때 노트로 이관. Team vault 노트 승격은 그 노트 자체가 MAIN. Ayaan `issueByKey` 도 메인 노트 설명. CQL `text ~` 는 제목 + 옛 CONTENT 만(메인 노트 본문 검색 미구현).
 - 산출물 규칙(`SN_CIRA_DOC_RULE`): 전사(`PROJECT_ID` null, 총괄 ADMIN) → `POST /projects/{id}/doc-rules/import` 로 프로젝트 공통 잠금 복사(`LOCKED_YN='Y'`, `SOURCE_RULE_ID`) → 공간 규칙(`SPACE_ID`). 저장은 범위·타입의 잠기지 않은 슬롯만 교체, 잠금·상위 규칙과 같은 폴더 이름 거절. Task 에 적용 = 프로젝트 공통 + 그 공간.
 - 미구현(위임): `SN_CIRA_PROJECT.PROJECT_TYPE_ID` 제거, 프리셋별 워크플로 정의, 공간 간 Task 이동, 대시보드·CQL·스프린트의 공간 필터.
-- 테스트: `FeatureRulesTest`, `CiraSpaceMigrationIT`(V630 재실행 백필), `CiraSpaceFlowIT`(공간·Feature·Docs 단일 원본·산출물 3단계).
+- 테스트: `FeatureRulesTest`, `CiraSpaceMigrationIT`(V650 재실행 백필), `CiraSpaceFlowIT`(공간·Feature·Docs 단일 원본·산출물 3단계).
 
 ### PDF 학습 뷰어 (study)
 

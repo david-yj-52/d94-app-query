@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class UpdateIssueRequest {
 	private String title;
-	/** Task 설명 = 연결된 Docs 메인 노트 본문. 주면 메인 노트 본문(frontmatter·진행 경과 제외)을 바꾼다 (V630) */
+	/** Task 설명 = 연결된 Docs 메인 노트 본문. 주면 메인 노트 본문(frontmatter·진행 경과 제외)을 바꾼다 (V650) */
 	private String content;
 	/** 연결할 Feature. "" = 연결 해제 */
 	private String featureId;

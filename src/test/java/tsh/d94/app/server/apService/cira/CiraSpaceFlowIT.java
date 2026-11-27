@@ -34,7 +34,7 @@ import tsh.d94.app.server.support.IntegrationTest;
 import tsh.d94.app.server.support.TestContexts;
 import tsh.d94.lib.core.data.orm.usersAndPermissions.gsUser.GsUserModel;
 
-/** V630: 작업 공간(프리셋 복사·공간 관리자 자율) · 2단계 Feature(공통 우선) · Docs 단일 원본 · 3단계 산출물 규칙 */
+/** V650: 작업 공간(프리셋 복사·공간 관리자 자율) · 2단계 Feature(공통 우선) · Docs 단일 원본 · 3단계 산출물 규칙 */
 @IntegrationTest
 class CiraSpaceFlowIT {
 

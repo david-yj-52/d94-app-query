@@ -22,13 +22,13 @@ import tsh.d94.app.server.support.IntegrationTest;
 import tsh.d94.app.server.support.TestContexts;
 
 /**
- * V630: 공간 개념 이전 모양(프로젝트에 Default 공간 없음, SPACE_ID null, 타입 세트 참조)의 데이터를
- * Default 공간 소유로 백필하는지. Flyway 가 이미 V630 을 적용한 DB 에 옛 모양을 만든 뒤 스크립트를 다시 실행한다(멱등).
+ * V650: 공간 개념 이전 모양(프로젝트에 Default 공간 없음, SPACE_ID null, 타입 세트 참조)의 데이터를
+ * Default 공간 소유로 백필하는지. Flyway 가 이미 V650 을 적용한 DB 에 옛 모양을 만든 뒤 스크립트를 다시 실행한다(멱등).
  */
 @IntegrationTest
 class CiraSpaceMigrationIT {
 
-	private static final String V630 = "db/migration/V630__cira_space_feature_docs.sql";
+	private static final String V650 = "db/migration/V650__cira_space_feature_docs.sql";
 
 	@Autowired CiraFixtures fixtures;
 	@Autowired CiraFieldService fields;
@@ -65,12 +65,12 @@ class CiraSpaceMigrationIT {
 		jdbc.update("insert into SN_CIRA_PROJECT_FIELD(PROJECT_ID, FIELD_KEY, SORT_ORD) values(?,?,1)", pid, "sys:dueDate");
 		jdbc.update("insert into SN_CIRA_PROJECT_FIELD(PROJECT_ID, FIELD_KEY, SORT_ORD) values(?,?,2)", pid, "sys:priority"); // 타입과 중복
 
-		// 옛 모양에는 SPACE_ID 유니크가 없었다 — 다시 실행하려면 V630 이 만든 제약을 먼저 지운다
+		// 옛 모양에는 SPACE_ID 유니크가 없었다 — 다시 실행하려면 V650 이 만든 제약을 먼저 지운다
 		jdbc.execute("alter table SN_CIRA_PROJECT_FIELD drop constraint if exists uk_ciraProjectField_02");
 		jdbc.execute("alter table SN_CIRA_USER_COLUMN_PREF drop constraint if exists uk_ciraUserColumnPref_02");
 		jdbc.execute("alter table SN_CIRA_ISSUE_STATUS drop constraint if exists uk_ciraIssueStatus_02");
 		try (Connection c = dataSource.getConnection()) {
-			ScriptUtils.executeSqlScript(c, new ClassPathResource(V630));
+			ScriptUtils.executeSqlScript(c, new ClassPathResource(V650));
 		}
 
 		Map<String, Object> space = jdbc.queryForMap("select OBJ_ID, ADMIN_USER_ID, IS_DEFAULT_YN from SN_CIRA_SPACE where PROJECT_ID=?", pid);

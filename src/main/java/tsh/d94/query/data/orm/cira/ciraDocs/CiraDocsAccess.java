@@ -56,7 +56,7 @@ public class CiraDocsAccess {
 			+ "on conflict do nothing", issueId, noteId, docRole, ruleId);
 	}
 
-	// ── 문서 기준정보 (V630: 전사 PROJECT_ID null · 프로젝트 공통 SPACE_ID null · 공간 SPACE_ID) ──
+	// ── 문서 기준정보 (V650: 전사 PROJECT_ID null · 프로젝트 공통 SPACE_ID null · 공간 SPACE_ID) ──
 
 	/** 프로젝트 공통 규칙 (가져온 잠금 규칙 포함) */
 	public List<DocRule> rules(String projectId) {

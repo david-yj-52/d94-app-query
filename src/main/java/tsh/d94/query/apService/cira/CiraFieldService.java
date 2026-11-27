@@ -394,7 +394,7 @@ public class CiraFieldService {
 		return replaceProjectFields(projectId, null, keys);
 	}
 
-	/** 공간 필드 세트 전체 교체 (V630: 타입 세트 고정 없음 — 공간 관리자가 자유롭게 켜고 끈다). 기존 키의 기본 표시 여부는 유지 */
+	/** 공간 필드 세트 전체 교체 (V650: 타입 세트 고정 없음 — 공간 관리자가 자유롭게 켜고 끈다). 기존 키의 기본 표시 여부는 유지 */
 	@Transactional
 	public List<Field> replaceProjectFields(String projectId, String spaceId, List<String> keys) {
 		String sid = spaces.requireManager(spaces.resolve(projectId, spaceId)).getObjId();

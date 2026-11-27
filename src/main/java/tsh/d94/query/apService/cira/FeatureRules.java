@@ -4,7 +4,7 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * 2단계 Feature 규칙 (V630, 기존 Epic 대체). 순수 함수만 — FeatureRulesTest.
+ * 2단계 Feature 규칙 (V650, 기존 Epic 대체). 순수 함수만 — FeatureRulesTest.
  * COMMON = 프로젝트 공통 레이어(SPACE_ID null), UNIT = 공간 Feature. 정렬·노출은 항상 COMMON 이 먼저.
  */
 public final class FeatureRules {

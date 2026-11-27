@@ -92,7 +92,7 @@ public class ProjectService {
 
 		projectMemberAccess.save(member);
 
-		// 타입 강제 대신: 고른 타입은 기본 작업 공간의 스타터 프리셋 (V630)
+		// 타입 강제 대신: 고른 타입은 기본 작업 공간의 스타터 프리셋 (V650)
 		spaceService.createDefault(project.getObjId(), request.getDefaultSpaceName(), type.id(), owner.getObjId());
 
 		return mapToResponse(project);
@@ -270,7 +270,7 @@ public class ProjectService {
 		projectMemberAccess.delete(member.getObjId());
 	}
 
-	// ── 워크플로 (V630: 공간 소유. spaceId null = 기본 공간, 수정은 프로젝트 ADMIN 또는 공간 관리자) ──
+	// ── 워크플로 (V650: 공간 소유. spaceId null = 기본 공간, 수정은 프로젝트 ADMIN 또는 공간 관리자) ──
 
 	public List<WorkflowStatusResponse> getWorkflowStatuses(String projectId) {
 		return getWorkflowStatuses(projectId, null);

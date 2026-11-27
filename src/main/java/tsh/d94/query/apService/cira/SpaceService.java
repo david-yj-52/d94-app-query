@@ -28,7 +28,7 @@ import tsh.d94.lib.core.data.orm.usersAndPermissions.gsUser.GsUserAccess;
 import tsh.d94.lib.core.data.orm.usersAndPermissions.gsUser.GsUserModel;
 
 /**
- * 작업 공간(Space) — 프로젝트 하위에서 워크플로·필드 세트·보드를 독립 운영하는 단위 (V630).
+ * 작업 공간(Space) — 프로젝트 하위에서 워크플로·필드 세트·보드를 독립 운영하는 단위 (V650).
  * 생성·삭제·관리자 임명 = 프로젝트 ADMIN. 이름·설명 수정 = 프로젝트 ADMIN 또는 공간 관리자.
  * 프리셋(구 ProjectType)은 만들 때 1회 복사하고 끝 — 이후 프리셋 변경과 무관.
  */

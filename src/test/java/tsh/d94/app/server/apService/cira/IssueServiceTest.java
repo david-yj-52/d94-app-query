@@ -103,7 +103,7 @@ class IssueServiceTest {
 	@InjectMocks
 	private IssueService issueService;
 
-	/** V630: 공간 미지정 → 기본 공간. 상태·보드는 공간 기준으로 찾는다 */
+	/** V650: 공간 미지정 → 기본 공간. 상태·보드는 공간 기준으로 찾는다 */
 	private static final String SPACE_ID = "space-1";
 
 	private SnCiraProjectModel project;

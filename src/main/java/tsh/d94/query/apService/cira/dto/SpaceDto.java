@@ -1,6 +1,6 @@
 package tsh.d94.app.server.apService.cira.dto;
 
-/** 작업 공간 요청·응답 (V630) */
+/** 작업 공간 요청·응답 (V650) */
 public final class SpaceDto {
 
 	private SpaceDto() {

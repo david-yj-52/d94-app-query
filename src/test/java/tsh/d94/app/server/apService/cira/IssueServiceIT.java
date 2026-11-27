@@ -146,7 +146,7 @@ class IssueServiceIT {
 
 		IssueResponse res = issueService.createIssue(project.getId(), req);
 
-		// V630: 설명은 Docs 메인 노트에 저장된다
+		// V650: 설명은 Docs 메인 노트에 저장된다
 		String stored = jdbc.queryForObject("""
 			select n.content from sn_docs_note n join sn_cira_issue_doc d on d.note_id = n.obj_id
 			where d.issue_id = ? and d.doc_role = 'MAIN'""", String.class, res.getId());
@@ -154,7 +154,7 @@ class IssueServiceIT {
 	}
 
 	@Test
-	@DisplayName("V630: 설명은 Docs 메인 노트에만 — 255자 넘는 수정도 노트 본문에 저장되고 SN_CIRA_ISSUE.CONTENT 는 비어 있다")
+	@DisplayName("V650: 설명은 Docs 메인 노트에만 — 255자 넘는 수정도 노트 본문에 저장되고 SN_CIRA_ISSUE.CONTENT 는 비어 있다")
 	void updateIssue_withLongContent_goesToMainNote() {
 		CreateIssueRequest req = fullRequest(null);
 		req.setContent("가".repeat(300));
@@ -190,7 +190,7 @@ class IssueServiceIT {
 	void issueTypes_seededAndListed() {
 		assertThat(issueService.getIssueTypes())
 			.extracting(tsh.d94.app.server.apService.cira.dto.IssueTypeResponse::getTypeNm)
-			.contains("Bug", "Feature", "Issue", "Story"); // V630: Epic → Feature
+			.contains("Bug", "Feature", "Issue", "Story"); // V650: Epic → Feature
 	}
 
 	@Test

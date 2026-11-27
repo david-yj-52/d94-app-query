@@ -123,7 +123,7 @@ class IssueControllerTest {
 	@DisplayName("GET·PUT·DELETE /issues/{issueId} 라우팅")
 	void getUpdateDelete() throws Exception {
 		given(issueService.getIssue("i-1")).willReturn(issue("CIRA-1"));
-		given(ciraDocsService.attachMain(any())).willAnswer(inv -> inv.getArgument(0)); // 설명 = 메인 노트 (V630)
+		given(ciraDocsService.attachMain(any())).willAnswer(inv -> inv.getArgument(0)); // 설명 = 메인 노트 (V650)
 		given(issueService.updateIssue(eq("i-1"), any())).willReturn(issue("CIRA-1"));
 
 		mvc.perform(get("/api/v1/issues/i-1")).andExpect(jsonPath("$.data.id").value("i-1"));

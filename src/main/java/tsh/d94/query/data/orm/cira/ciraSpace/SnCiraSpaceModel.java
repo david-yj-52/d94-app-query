@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
-/** 프로젝트 하위 작업 공간 (V630). 상태·전이·보드·필드 세트·컬럼 설정·공간 산출물 규칙의 소유자. 물리 삭제 */
+/** 프로젝트 하위 작업 공간 (V650). 상태·전이·보드·필드 세트·컬럼 설정·공간 산출물 규칙의 소유자. 물리 삭제 */
 @Entity
 @Table(name = ApTableName.SN_CIRA_SPACE)
 @Getter

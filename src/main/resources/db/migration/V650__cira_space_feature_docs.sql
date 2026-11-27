@@ -1,5 +1,5 @@
 -- =============================================================
--- V630: CIRA 작업 공간(Space) · 2단계 Feature · 3단계 산출물 규칙
+-- V650: CIRA 작업 공간(Space) · 2단계 Feature · 3단계 산출물 규칙
 -- 설계: DOCS 노트 "CIRA 작업 공간(Space) · Feature · Docs 중심 개편 설계" → "상세 디자인" → "구현 계획"
 -- 프로젝트 = 컨테이너(Team Vault·이슈 키·공통 Feature). 상태·전이·보드·필드 세트·컬럼 설정은 공간 소유.
 -- SPACE_ID 는 NULL 허용: 이슈의 NULL = 공통 레이어(COMMON Feature). 그 밖의 테이블은 백필 후 항상 채워진다.
@@ -56,19 +56,19 @@ ALTER TABLE SN_CIRA_DOC_RULE DROP CONSTRAINT IF EXISTS ux_ciraDocRule;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_ciraDocRule_scope
     ON SN_CIRA_DOC_RULE (COALESCE(PROJECT_ID, ''), COALESCE(SPACE_ID, ''), ISSUE_TYPE_ID, FOLDER_NAME);
 
--- ── 이관 1: 프로젝트마다 Default 공간 (관리자 = 프로젝트 OWNER). 이번 실행에서 만든 공간만 v630_new_space 에 ──
-DROP TABLE IF EXISTS v630_new_space;
-CREATE TEMP TABLE v630_new_space (SPACE_ID VARCHAR(255), PROJECT_ID VARCHAR(100));
+-- ── 이관 1: 프로젝트마다 Default 공간 (관리자 = 프로젝트 OWNER). 이번 실행에서 만든 공간만 v650_new_space 에 ──
+DROP TABLE IF EXISTS v650_new_space;
+CREATE TEMP TABLE v650_new_space (SPACE_ID VARCHAR(255), PROJECT_ID VARCHAR(100));
 WITH ins AS (
     INSERT INTO SN_CIRA_SPACE (OBJ_ID, PROJECT_ID, SPACE_NM, SPACE_KEY, PRESET_TYPE_ID, ADMIN_USER_ID, IS_DEFAULT_YN,
                                SORT_ORD, SRV_ID, TENANT, TRACE_ID, EVNT_NM, PREV_EVNT_NM, USE_STAT_CD, CREATED_AT,
                                MODIFIED_AT)
         SELECT gen_random_uuid()::text, p.OBJ_ID, 'Default', 'DEFAULT', p.PROJECT_TYPE_ID, p.OWNER_ID, 'Y', 0, 'd94-query',
-               COALESCE(p.TENANT, 'TSH'), 'V630', 'CreateSpace', 'None', 'Usable', now(), now()
+               COALESCE(p.TENANT, 'TSH'), 'V650', 'CreateSpace', 'None', 'Usable', now(), now()
         FROM SN_CIRA_PROJECT p
         WHERE NOT EXISTS (SELECT 1 FROM SN_CIRA_SPACE s WHERE s.PROJECT_ID = p.OBJ_ID AND s.IS_DEFAULT_YN = 'Y')
         RETURNING OBJ_ID, PROJECT_ID)
-INSERT INTO v630_new_space SELECT OBJ_ID, PROJECT_ID FROM ins;
+INSERT INTO v650_new_space SELECT OBJ_ID, PROJECT_ID FROM ins;
 
 -- ── 이관 2: SPACE_ID 백필 (Default 공간) ──
 UPDATE SN_CIRA_ISSUE t SET SPACE_ID = s.OBJ_ID FROM SN_CIRA_SPACE s
@@ -84,17 +84,17 @@ WHERE t.SPACE_ID IS NULL AND s.PROJECT_ID = t.PROJECT_ID AND s.IS_DEFAULT_YN = '
 
 -- 필드 세트 (새로 공간을 만든 프로젝트만): 지금까지의 "타입 세트 + 프로젝트 추가" 를 Default 공간 소유 행으로 펼친다
 -- (이후 타입과 연결 끊김). 순서: 타입 세트(SORT_ORD 1..) → 프로젝트 추가(1000..). 같은 키는 타입 쪽만.
-DELETE FROM SN_CIRA_PROJECT_FIELD pf USING SN_CIRA_PROJECT p, SN_CIRA_PROJECT_TYPE_FIELD tf, v630_new_space n
+DELETE FROM SN_CIRA_PROJECT_FIELD pf USING SN_CIRA_PROJECT p, SN_CIRA_PROJECT_TYPE_FIELD tf, v650_new_space n
 WHERE pf.SPACE_ID IS NULL AND n.PROJECT_ID = pf.PROJECT_ID AND p.OBJ_ID = pf.PROJECT_ID
   AND tf.PROJECT_TYPE_ID = p.PROJECT_TYPE_ID AND tf.FIELD_KEY = pf.FIELD_KEY;
 UPDATE SN_CIRA_PROJECT_FIELD t SET SPACE_ID = s.OBJ_ID, SORT_ORD = 1000 + t.SORT_ORD FROM SN_CIRA_SPACE s
 WHERE t.SPACE_ID IS NULL AND s.PROJECT_ID = t.PROJECT_ID AND s.IS_DEFAULT_YN = 'Y';
 INSERT INTO SN_CIRA_PROJECT_FIELD (PROJECT_ID, SPACE_ID, FIELD_KEY, SORT_ORD, DEFAULT_VISIBLE_YN)
 SELECT p.OBJ_ID, n.SPACE_ID, tf.FIELD_KEY, tf.SORT_ORD, tf.DEFAULT_VISIBLE_YN
-FROM v630_new_space n
+FROM v650_new_space n
          JOIN SN_CIRA_PROJECT p ON p.OBJ_ID = n.PROJECT_ID
          JOIN SN_CIRA_PROJECT_TYPE_FIELD tf ON tf.PROJECT_TYPE_ID = p.PROJECT_TYPE_ID;
-DROP TABLE v630_new_space;
+DROP TABLE v650_new_space;
 
 -- 유일성: 프로젝트 → 공간 단위
 ALTER TABLE SN_CIRA_PROJECT_FIELD DROP CONSTRAINT IF EXISTS uk_ciraProjectField_01;

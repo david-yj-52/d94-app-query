@@ -286,7 +286,7 @@ public class CiraDocsService {
 	public IssueResponse promote(String projectId, String noteId, PromoteRequest req) {
 		SnDocsNoteModel src = notes.requireOwned(noteId);
 		String title = blankToNull(req.title()) == null ? src.getTitle() : req.title().trim();
-		// 프로젝트 Team vault 노트면 그 노트 자체가 Task 의 MAIN(설명)이 된다 (V630 단일 원본)
+		// 프로젝트 Team vault 노트면 그 노트 자체가 Task 의 MAIN(설명)이 된다 (V650 단일 원본)
 		boolean sameVault = src.getVaultId().equals(vaults.teamVault(projectAccess.findById(projectId)).getObjId());
 		IssueResponse issue;
 		if (sameVault) {
@@ -310,7 +310,7 @@ public class CiraDocsService {
 		return issue;
 	}
 
-	// ── 기준정보 (V630: 전사 · 프로젝트 공통 · 공간 3단계) ──
+	// ── 기준정보 (V650: 전사 · 프로젝트 공통 · 공간 3단계) ──
 
 	/** 프로젝트 공통 규칙 (기준정보에서 가져온 잠금 규칙 포함) */
 	public List<DocRuleDto> rules(String projectId) {

@@ -59,7 +59,7 @@ public class BoardService {
 
 	@Transactional
 	public BoardResponse createBoard(String projectId, CreateBoardRequest request) {
-		// 보드/뷰는 공간 관리 항목 (V630): 프로젝트 ADMIN 또는 공간 관리자
+		// 보드/뷰는 공간 관리 항목 (V650): 프로젝트 ADMIN 또는 공간 관리자
 		String spaceId = spaceGuard.requireManager(spaceGuard.resolve(projectId, request.getSpaceId())).getObjId();
 
 		SnCiraBoardModel board = SnCiraBoardModel.builder()

@@ -388,7 +388,7 @@ public class AyaanService {
 	public IssueDto issueByKey(String issueKey) {
 		var i = issueAccess.findByIssueKey(issueKey).orElseThrow(() -> new EntityNotFoundException("issue not found: " + issueKey));
 		String projectKey = projectAccess.findProjectKeyById(i.getProjectId()).orElse(null);
-		// 설명의 원본은 Docs 메인 노트 (V630). 이관 전 Task 만 옛 CONTENT
+		// 설명의 원본은 Docs 메인 노트 (V650). 이관 전 Task 만 옛 CONTENT
 		String content = ciraDocsAccess.mainNoteId(i.getObjId()).flatMap(noteAccess::findByIdOptional)
 			.map(n -> tsh.d94.app.server.apService.cira.CiraDocsService.description(n.getContent()))
 			.orElse(i.getContent());

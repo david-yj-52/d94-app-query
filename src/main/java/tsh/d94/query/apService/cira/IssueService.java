@@ -96,7 +96,7 @@ public class IssueService {
 			.orElseThrow(() -> new IllegalArgumentException("User is not a member of the project"));
 
 		String issueTypeId = resolveIssueTypeId(request.getIssueTypeId());
-		// 공간·Feature 범위 (V630): COMMON Feature 만 공통 레이어(SPACE_ID null), 나머지는 공간 소유
+		// 공간·Feature 범위 (V650): COMMON Feature 만 공통 레이어(SPACE_ID null), 나머지는 공간 소유
 		String featureScope = FeatureRules.scope(isFeature(issueTypeId), request.getFeatureScope());
 		String spaceId = FeatureRules.COMMON.equals(featureScope) ? null
 			: spaceGuard.resolve(projectId, request.getSpaceId()).getObjId();
@@ -201,7 +201,7 @@ public class IssueService {
 			eventPublisher.publishEvent(new IssueTitleChangedEvent(this, issueId)); // Docs 메인 노트 제목 동기화
 		}
 		if (request.getContent() != null) {
-			// 설명의 원본은 Docs 메인 노트 (V630). 이력은 노트 버전이 남긴다
+			// 설명의 원본은 Docs 메인 노트 (V650). 이력은 노트 버전이 남긴다
 			eventPublisher.publishEvent(new IssueContentChangedEvent(this, issueId, request.getContent()));
 		}
 		if (request.getFeatureId() != null) {

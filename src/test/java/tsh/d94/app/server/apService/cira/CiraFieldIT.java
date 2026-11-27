@@ -104,13 +104,13 @@ class CiraFieldIT {
 		ProjectResponse p = fixtures.project("SCRUM");
 		assertThat(p.getProjectTypeId()).isEqualTo(scrum.id());
 		assertThat(jdbc.queryForObject("select board_type from sn_cira_board where project_id=?", String.class, p.getId()))
-			.isEqualTo("SCRUM"); // V630: 타입 = 기본 작업 공간 프리셋, 보드 유형도 프리셋에서
+			.isEqualTo("SCRUM"); // V650: 타입 = 기본 작업 공간 프리셋, 보드 유형도 프리셋에서
 		assertThat(jdbc.queryForList("select type_nm from sn_cira_cira_issue_type", String.class)).contains("Issue")
 			.doesNotContain("Task");
 	}
 
 	@Test
-	@DisplayName("V630: 유효 필드 = 고정 → 공간 필드 세트. 타입(프리셋)은 만들 때 1회 복사 — 이후 타입 변경과 무관하고, 공간이 프리셋 필드를 자유롭게 뺀다")
+	@DisplayName("V650: 유효 필드 = 고정 → 공간 필드 세트. 타입(프리셋)은 만들 때 1회 복사 — 이후 타입 변경과 무관하고, 공간이 프리셋 필드를 자유롭게 뺀다")
 	void effectiveFields_presetCopiedOnce_spaceOwnsSet() {
 		assertThat(keys(fields.projectFields(project.getId()))).containsExactly(
 			"sys:type", "sys:key", "sys:summary", "sys:status", "sys:priority", "sys:assignee", "sys:modifiedAt");

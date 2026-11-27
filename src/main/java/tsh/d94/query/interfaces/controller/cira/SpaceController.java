@@ -36,7 +36,7 @@ import tsh.d94.app.server.apService.cira.dto.WorkflowTransitionResponse;
 import tsh.d94.lib.core.interfaces.rest.ApiResponse;
 
 /**
- * 작업 공간(V630) CRUD 와 공간별 자율 설정. /spaces/{spaceId}/... 는 기존 /projects/{id}/...?spaceId= 와 같은 서비스를 탄다.
+ * 작업 공간(V650) CRUD 와 공간별 자율 설정. /spaces/{spaceId}/... 는 기존 /projects/{id}/...?spaceId= 와 같은 서비스를 탄다.
  * 권한: 조회 = 프로젝트 멤버, 공간 설정 수정 = 프로젝트 ADMIN 또는 공간 관리자, 공간 생성·삭제·관리자 임명 = 프로젝트 ADMIN.
  */
 @RestController

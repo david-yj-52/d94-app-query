@@ -55,7 +55,7 @@ public class CiraFieldAccess {
 		return types(tenant).stream().filter(t -> t.id().equals(id)).findFirst().orElse(null);
 	}
 
-	/** 프리셋 기본 보드 유형 (V630). 없으면 KANBAN */
+	/** 프리셋 기본 보드 유형 (V650). 없으면 KANBAN */
 	public String boardType(String typeId) {
 		return jdbc.queryForList("select BOARD_TYPE from SN_CIRA_PROJECT_TYPE where OBJ_ID=?", String.class, typeId).stream()
 			.findFirst().orElse("KANBAN");
@@ -105,7 +105,7 @@ public class CiraFieldAccess {
 		}
 	}
 
-	// ── 공간 필드 세트 (V630: SN_CIRA_PROJECT_FIELD 는 공간 소유) ─────────────────────────
+	// ── 공간 필드 세트 (V650: SN_CIRA_PROJECT_FIELD 는 공간 소유) ─────────────────────────
 
 	public List<TypeField> spaceFields(String spaceId) {
 		return jdbc.query("select FIELD_KEY, DEFAULT_VISIBLE_YN from SN_CIRA_PROJECT_FIELD where SPACE_ID=? order by SORT_ORD",
