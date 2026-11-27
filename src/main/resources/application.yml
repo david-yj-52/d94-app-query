@@ -9,6 +9,14 @@ study:
     service-token: ${PDF_PARSER_SERVICE_TOKEN:}
     timeout: 120s
 
+infra:
+  # Vercel(d94-web) 배포 상태 동기화. 토큰이 비어 있으면 동기화 안 함
+  vercel:
+    token: ${INFRA_VERCEL_TOKEN:}
+    project: ${INFRA_VERCEL_PROJECT:d94-web}
+    team-id: ${INFRA_VERCEL_TEAM_ID:}
+    node-key: ${INFRA_VERCEL_NODE_KEY:vercel-web}
+
 cira:
   storage:
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
