@@ -15,12 +15,10 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -39,7 +37,6 @@ import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.Usage;
 import tsh.d94.app.server.data.orm.cira.ciraField.CiraFieldAccess;
 import tsh.d94.app.server.data.orm.cira.ciraField.CiraFieldAccess.CfValue;
 import tsh.d94.app.server.data.orm.cira.ciraField.CiraFieldAccess.CustomField;
-import tsh.d94.app.server.data.orm.cira.ciraProject.SnCiraProjectAccess;
 import tsh.d94.app.server.data.orm.cira.ciraProjectMember.SnCiraProjectMemberAccess;
 import tsh.d94.app.server.data.orm.cira.ciraProjectMember.SnCiraProjectMemberModel;
 import tsh.d94.lib.core.data.constant.UseStatCd;
@@ -74,7 +71,6 @@ public class CiraFieldService {
 
 	private final CiraFieldAccess access;
 	private final SpaceGuard spaces;
-	private final SnCiraProjectAccess projectAccess;
 	private final SnCiraProjectMemberAccess memberAccess;
 	private final GsUserAccess userAccess;
 	private final jakarta.persistence.EntityManager entityManager;
@@ -97,7 +93,7 @@ public class CiraFieldService {
 
 	public List<ProjectType> types() {
 		return access.types(tenant()).stream()
-			.map(t -> new ProjectType(t.id(), t.typeNm(), t.descr(), t.sortOrd(), access.projectsUsingType(t.id()),
+			.map(t -> new ProjectType(t.id(), t.typeNm(), t.descr(), t.sortOrd(), access.spacesUsingPreset(t.id()),
 				access.typeSet(t.id()).stream().map(f -> new TypeField(f.fieldKey(), f.defaultVisible())).toList()))
 			.toList();
 	}
@@ -122,10 +118,7 @@ public class CiraFieldService {
 	@Transactional
 	public void deleteType(String id) {
 		requireType(id);
-		int used = access.projectsUsingType(id);
-		if (used > 0) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "이 타입을 쓰는 프로젝트가 " + used + "개 있어 삭제할 수 없습니다");
-		}
+		// 프리셋은 만들 때 1회 복사라 이걸로 만든 공간이 있어도 지울 수 있다 (공간 설정·복사본 필드는 그대로)
 		// 타입 필드 값의 FK 때문에 CASCADE 가 막히지 않도록 타입 필드를 먼저 지운다
 		access.typeFields(tenant(), id).forEach(cf -> access.deleteCustomField(cf.id()));
 		access.deleteType(id);
@@ -159,8 +152,8 @@ public class CiraFieldService {
 		return type(id);
 	}
 
-	/** 프로젝트 생성·수정 시 타입 결정: ID 우선, 없으면 이름(옛 클라이언트), 둘 다 없으면 첫 타입 */
-	public CiraFieldAccess.ProjectType resolveProjectType(String typeId, String typeNm) {
+	/** 프로젝트 생성 시 기본 공간 프리셋: ID 우선, 없으면 이름(옛 클라이언트), 둘 다 없으면 첫 프리셋 */
+	public CiraFieldAccess.ProjectType resolvePreset(String typeId, String typeNm) {
 		String tenant = tenant();
 		CiraFieldAccess.ProjectType t;
 		if (typeId != null) {
@@ -171,7 +164,7 @@ public class CiraFieldService {
 			t = access.types(tenant).stream().findFirst().orElse(null);
 		}
 		if (t == null) {
-			throw new IllegalArgumentException("프로젝트 타입이 없습니다. 기준정보에서 타입을 먼저 확인하세요: "
+			throw new IllegalArgumentException("작업 공간 프리셋이 없습니다. 기준정보에서 프리셋을 먼저 확인하세요: "
 				+ (typeId != null ? typeId : typeNm));
 		}
 		return t;
@@ -236,22 +229,18 @@ public class CiraFieldService {
 
 	// ── 사용자 정의 필드: 프로젝트 (멤버) ─────────────────────
 
-	/** 가져올 수 있는 것: 전역 + 이 프로젝트 타입의 타입 필드 중 기본 세트에 없는 것 */
+	/** 가져올 수 있는 것: 전역 필드 + 모든 프리셋의 필드 (공간은 어느 프리셋의 필드든 가져올 수 있다). 이미 가져온 건 importedAs */
 	public List<LibraryItem> library(String projectId) {
 		requireMember(projectId);
 		Map<String, String> imported = new HashMap<>();
 		access.projectCustomFields(tenant(), projectId).stream().filter(cf -> cf.sourceFieldId() != null)
 			.forEach(cf -> imported.putIfAbsent(cf.sourceFieldId(), "cf:" + cf.id()));
 		List<CustomField> items = new ArrayList<>(access.globalFields(tenant()));
-		String typeId = projectAccess.findById(projectId).getProjectTypeId();
-		if (typeId != null) {
-			Set<String> inSet = access.typeSet(typeId).stream().map(CiraFieldAccess.TypeField::fieldKey).collect(Collectors.toSet());
-			access.typeFields(tenant(), typeId).stream().filter(cf -> !inSet.contains("cf:" + cf.id())).forEach(items::add);
-		}
+		items.addAll(access.allTypeFields(tenant()));
 		return items.stream().map(cf -> new LibraryItem(toField(cf, null, true, null), imported.get(cf.id()))).toList();
 	}
 
-	/** 전역 필드 또는 이 프로젝트 타입의 타입 필드를 프로젝트 필드로 복사하고 추가 필드 끝에 붙인다 */
+	/** 전역 필드 또는 프리셋 필드를 프로젝트 필드로 복사하고 기본 공간 필드 세트 끝에 붙인다 */
 	@Transactional
 	public Field importToProject(String projectId, String sourceFieldId) {
 		return importToProject(projectId, null, sourceFieldId);
@@ -263,14 +252,9 @@ public class CiraFieldService {
 		requireMember(projectId);
 		String sid = spaces.resolve(projectId, spaceId).getObjId();
 		CustomField src = access.customField(tenant(), sourceFieldId);
-		String typeId = projectAccess.findById(projectId).getProjectTypeId();
-		boolean global = src != null && src.projectId() == null && src.projectTypeId() == null;
-		boolean ownType = src != null && src.projectTypeId() != null && src.projectTypeId().equals(typeId);
-		if (!global && !ownType) {
+		// 다른 프로젝트의 필드는 가져올 수 없다 (전역·프리셋 필드만)
+		if (src == null || src.projectId() != null) {
 			throw new jakarta.persistence.EntityNotFoundException("가져올 수 있는 필드가 아닙니다: " + sourceFieldId);
-		}
-		if (ownType && access.typeSet(typeId).stream().anyMatch(tf -> tf.fieldKey().equals("cf:" + src.id()))) {
-			throw new IllegalArgumentException("이미 이 타입의 기본 세트로 적용된 필드입니다");
 		}
 		Field copy = copyField(src, projectId, null);
 		appendSpaceField(projectId, sid, copy.fieldKey());
@@ -697,13 +681,13 @@ public class CiraFieldService {
 		return writeJson(clean);
 	}
 
-	/** 유효 필드 계산에 쓰는 사용자 정의 필드: 이 프로젝트 타입의 타입 필드(세트 참조용) + 이 프로젝트 필드 */
+	/**
+	 * 유효 필드 계산에 쓰는 사용자 정의 필드: 이 프로젝트 필드 + 프리셋 필드.
+	 * ponytail: 프리셋 필드는 V650 이전 세트가 원본 키(cf:타입필드)를 그대로 가리키는 경우용. 새 공간은 복사본만 쓴다.
+	 */
 	private Map<String, CustomField> visibleCustomFields(String projectId) {
-		String typeId = projectAccess.findById(projectId).getProjectTypeId();
 		List<CustomField> all = new ArrayList<>(access.projectCustomFields(tenant(), projectId));
-		if (typeId != null) {
-			all.addAll(access.typeFields(tenant(), typeId));
-		}
+		all.addAll(access.allTypeFields(tenant()));
 		return all.stream().collect(Collectors.toMap(CustomField::id, Function.identity()));
 	}
 

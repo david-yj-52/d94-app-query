@@ -1,5 +1,7 @@
 package tsh.d94.app.server.apService.cira.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,7 +15,11 @@ public class CreateProjectRequest {
 	private String key;
 	private String name;
 	private String description;
-	private String projectTypeId; // SN_CIRA_PROJECT_TYPE.OBJ_ID (기준정보)
-	private String projectType; // 옛 클라이언트용 타입 이름. projectTypeId 가 있으면 무시
-	private String defaultSpaceName; // 기본 작업 공간 이름 (없으면 General). 타입은 그 공간의 스타터 프리셋 (V650)
+	/** 기본 작업 공간의 스타터 프리셋(SN_CIRA_PROJECT_TYPE.OBJ_ID). 프로젝트에는 남지 않는다 (V660). 옛 이름 projectTypeId */
+	@JsonAlias("projectTypeId")
+	private String presetTypeId;
+	/** 프리셋 이름 (옛 클라이언트, presetTypeId 가 있으면 무시). 옛 이름 projectType */
+	@JsonAlias("projectType")
+	private String presetTypeNm;
+	private String defaultSpaceName; // 기본 작업 공간 이름 (없으면 General)
 }

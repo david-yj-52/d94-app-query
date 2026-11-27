@@ -58,13 +58,11 @@ public class ProjectService {
 			throw new IllegalArgumentException("Project key already exists: " + request.getKey());
 		}
 
-		var type = fieldService.resolveProjectType(request.getProjectTypeId(), request.getProjectType());
+		var preset = fieldService.resolvePreset(request.getPresetTypeId(), request.getPresetTypeNm());
 		SnCiraProjectModel project = SnCiraProjectModel.builder()
 			.projectKey(request.getKey())
 			.projectNm(request.getName())
 			.descr(request.getDescription())
-			.projectType(type.typeNm())
-			.projectTypeId(type.id())
 			.ownerId(owner.getObjId())
 			.issueSequence(0)
 			.srvId(ApplicationProperties.getApplicationServiceName())
@@ -92,8 +90,8 @@ public class ProjectService {
 
 		projectMemberAccess.save(member);
 
-		// 타입 강제 대신: 고른 타입은 기본 작업 공간의 스타터 프리셋 (V650)
-		spaceService.createDefault(project.getObjId(), request.getDefaultSpaceName(), type.id(), owner.getObjId());
+		// 프로젝트는 타입이 없다: 고른 프리셋은 기본 작업 공간에 한 번 복사될 뿐 (V650·V660)
+		spaceService.createDefault(project.getObjId(), request.getDefaultSpaceName(), preset.id(), owner.getObjId());
 
 		return mapToResponse(project);
 	}
@@ -137,11 +135,6 @@ public class ProjectService {
 		}
 		if (request.getDescription() != null) {
 			project.setDescr(request.getDescription());
-		}
-		if (request.getProjectTypeId() != null || request.getProjectType() != null) {
-			var type = fieldService.resolveProjectType(request.getProjectTypeId(), request.getProjectType());
-			project.setProjectTypeId(type.id());
-			project.setProjectType(type.typeNm());
 		}
 		project.setEvtNm("UpdateProject");
 		projectAccess.save(project);
@@ -438,9 +431,6 @@ public class ProjectService {
 			.key(model.getProjectKey())
 			.name(model.getProjectNm())
 			.description(model.getDescr())
-			.projectType(model.getProjectType())
-			.projectTypeId(model.getProjectTypeId())
-			.projectTypeNm(model.getProjectType())
 			.ownerId(model.getOwnerId())
 			.issueSequence(model.getIssueSequence())
 			.build();

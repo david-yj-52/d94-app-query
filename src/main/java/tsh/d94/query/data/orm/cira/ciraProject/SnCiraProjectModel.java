@@ -39,13 +39,6 @@ public class SnCiraProjectModel extends BaseModel {
 	@Column(name = "DESCR", columnDefinition = "text")
 	private String descr;
 
-	@Column(name = "PROJECT_TYPE", length = 30, nullable = false)
-	private String projectType;
-
-	/** SN_CIRA_PROJECT_TYPE.OBJ_ID (V590). PROJECT_TYPE 문자열은 이름 사본으로만 남는다 */
-	@Column(name = "PROJECT_TYPE_ID", length = 100)
-	private String projectTypeId;
-
 	@Column(name = "OWNER_ID", length = 100)
 	private String ownerId;
 
