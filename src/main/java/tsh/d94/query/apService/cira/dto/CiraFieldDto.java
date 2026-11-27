@@ -21,7 +21,7 @@ public final class CiraFieldDto {
 
 	public record TypeField(String fieldKey, boolean defaultVisible) {}
 
-	public record ProjectType(String id, String typeNm, String descr, int sortOrd, int projectCount, List<TypeField> fields) {}
+	public record ProjectType(String id, String typeNm, String descr, int sortOrd, int spaceCount, List<TypeField> fields) {}
 
 	public record SaveType(String typeNm, String descr) {}
 

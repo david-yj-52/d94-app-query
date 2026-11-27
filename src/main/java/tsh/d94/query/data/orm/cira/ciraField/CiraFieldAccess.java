@@ -76,18 +76,17 @@ public class CiraFieldAccess {
 
 	public void updateType(String id, String typeNm, String descr) {
 		jdbc.update("update SN_CIRA_PROJECT_TYPE set TYPE_NM=?, DESCR=?, MODIFIED_AT=now() where OBJ_ID=?", typeNm, descr, id);
-		// 이름 사본(PROJECT_TYPE 칼럼, NOT NULL)도 맞춘다
-		jdbc.update("update SN_CIRA_PROJECT set PROJECT_TYPE=? where PROJECT_TYPE_ID=?", typeNm, id);
 	}
 
-	public int projectsUsingType(String id) {
-		return jdbc.queryForObject("select count(*) from SN_CIRA_PROJECT where PROJECT_TYPE_ID=? and DELETED_AT is null",
-			Integer.class, id);
+	/** 이 프리셋으로 만든 작업 공간 수 (참고용 — 만든 뒤에는 연결이 없다) */
+	public int spacesUsingPreset(String id) {
+		return jdbc.queryForObject("""
+			select count(*) from SN_CIRA_SPACE s join SN_CIRA_PROJECT p on p.OBJ_ID=s.PROJECT_ID
+			where s.PRESET_TYPE_ID=? and p.DELETED_AT is null""", Integer.class, id);
 	}
 
-	/** 삭제된(soft) 프로젝트의 FK 는 끊고 지운다 */
 	public void deleteType(String id) {
-		jdbc.update("update SN_CIRA_PROJECT set PROJECT_TYPE_ID=null where PROJECT_TYPE_ID=?", id);
+		jdbc.update("update SN_CIRA_SPACE set PRESET_TYPE_ID=null where PRESET_TYPE_ID=?", id);
 		jdbc.update("delete from SN_CIRA_PROJECT_TYPE where OBJ_ID=?", id);
 	}
 
@@ -125,6 +124,12 @@ public class CiraFieldAccess {
 	public List<CustomField> globalFields(String tenant) {
 		return jdbc.query("select " + CF_COLS + " from SN_CIRA_CUSTOM_FIELD where TENANT=? and PROJECT_ID is null and PROJECT_TYPE_ID is null"
 			+ CF_ORDER, this::cf, tenant);
+	}
+
+	/** 모든 프리셋의 필드 */
+	public List<CustomField> allTypeFields(String tenant) {
+		return jdbc.query("select " + CF_COLS + " from SN_CIRA_CUSTOM_FIELD where TENANT=? and PROJECT_TYPE_ID is not null" + CF_ORDER,
+			this::cf, tenant);
 	}
 
 	public List<CustomField> typeFields(String tenant, String typeId) {
@@ -169,10 +174,9 @@ public class CiraFieldAccess {
 		String key = "cf:" + id;
 		Integer projects = jdbc.queryForObject("""
 			select count(distinct p.OBJ_ID) from SN_CIRA_PROJECT p
-			where p.DELETED_AT is null and (
-			  exists (select 1 from SN_CIRA_PROJECT_TYPE_FIELD tf where tf.PROJECT_TYPE_ID=p.PROJECT_TYPE_ID and tf.FIELD_KEY=?)
-			  or exists (select 1 from SN_CIRA_PROJECT_FIELD pf where pf.PROJECT_ID=p.OBJ_ID and pf.FIELD_KEY=?))""",
-			Integer.class, key, key);
+			where p.DELETED_AT is null
+			  and exists (select 1 from SN_CIRA_PROJECT_FIELD pf where pf.PROJECT_ID=p.OBJ_ID and pf.FIELD_KEY=?)""",
+			Integer.class, key);
 		Integer issues = jdbc.queryForObject("select count(*) from SN_CIRA_ISSUE_CF_VALUE where CUSTOM_FIELD_ID=?", Integer.class, id);
 		return new int[] {projects, issues};
 	}

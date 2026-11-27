@@ -37,6 +37,7 @@ class CiraSpaceMigrationIT {
 
 	@AfterEach
 	void tearDown() {
+		jdbc.execute("alter table SN_CIRA_PROJECT drop column if exists PROJECT_TYPE_ID");
 		TestContexts.clear();
 	}
 
@@ -49,6 +50,8 @@ class CiraSpaceMigrationIT {
 		String issueId = fixtures.issue(p.getId(), "옛 이슈", null).getId();
 		// 다른 테스트와 겹치지 않게 이 테스트 전용 타입
 		String typeId = fields.createType(new SaveType("MIG-" + java.util.UUID.randomUUID().toString().substring(0, 6), null)).id();
+		// 옛 모양: V660 이 지운 프로젝트 타입 칼럼을 되살린다 (tearDown 에서 다시 지움)
+		jdbc.execute("alter table SN_CIRA_PROJECT add column if not exists PROJECT_TYPE_ID varchar(100)");
 		jdbc.update("update SN_CIRA_PROJECT set PROJECT_TYPE_ID=? where OBJ_ID=?", typeId, p.getId());
 
 		// 옛 모양으로 되돌린다: 공간 없음, SPACE_ID null, 필드 세트 = 타입 세트(참조) + 프로젝트 추가 1개

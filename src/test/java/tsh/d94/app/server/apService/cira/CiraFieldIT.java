@@ -15,7 +15,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.web.server.ResponseStatusException;
 
 import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.Field;
 import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.ProjectType;
@@ -27,7 +26,6 @@ import tsh.d94.app.server.apService.cira.dto.IssueFilterRequest;
 import tsh.d94.app.server.apService.cira.dto.IssueResponse;
 import tsh.d94.app.server.apService.cira.dto.ProjectResponse;
 import tsh.d94.app.server.apService.cira.dto.UpdateIssueRequest;
-import tsh.d94.app.server.apService.cira.dto.UpdateProjectRequest;
 import tsh.d94.app.server.support.CiraFixtures;
 import tsh.d94.app.server.support.IntegrationTest;
 import tsh.d94.app.server.support.TestContexts;
@@ -56,10 +54,7 @@ class CiraFieldIT {
 		TestContexts.login(email);
 		fixtures.user(email);
 		type = fields.createType(new SaveType("영업-" + UUID.randomUUID().toString().substring(0, 6), null));
-		UpdateProjectRequest req = new UpdateProjectRequest();
-		project = fixtures.project("KANBAN");
-		req.setProjectTypeId(type.id());
-		project = projects.updateProject(project.getId(), req);
+		project = fixtures.project(type.typeNm()); // 이 프리셋으로 기본 공간을 만든다
 	}
 
 	@AfterEach
@@ -102,7 +97,8 @@ class CiraFieldIT {
 		assertThat(scrum.fields()).extracting(TypeField::fieldKey)
 			.containsExactly("sys:priority", "sys:assignee", "sys:modifiedAt", "sys:sprint", "sys:storyPoints");
 		ProjectResponse p = fixtures.project("SCRUM");
-		assertThat(p.getProjectTypeId()).isEqualTo(scrum.id());
+		assertThat(jdbc.queryForObject("select PRESET_TYPE_ID from SN_CIRA_SPACE where PROJECT_ID=? and IS_DEFAULT_YN='Y'",
+			String.class, p.getId())).isEqualTo(scrum.id());
 		assertThat(jdbc.queryForObject("select board_type from sn_cira_board where project_id=?", String.class, p.getId()))
 			.isEqualTo("SCRUM"); // V650: 타입 = 기본 작업 공간 프리셋, 보드 유형도 프리셋에서
 		assertThat(jdbc.queryForList("select type_nm from sn_cira_cira_issue_type", String.class)).contains("Issue")
@@ -123,9 +119,8 @@ class CiraFieldIT {
 		assertThat(keys(eff)).containsExactly("sys:type", "sys:key", "sys:summary", "sys:status", "sys:storyPoints", "sys:dueDate");
 		assertThat(eff.get(4).source()).isEqualTo("project");
 
-		// 이름을 바꿔도 프로젝트의 타입 참조(이름 사본)는 유지
-		fields.updateType(type.id(), new SaveType(type.typeNm() + "2", null));
-		assertThat(projects.getProject(project.getId()).getProjectTypeNm()).isEqualTo(type.typeNm() + "2");
+		// 프리셋 사용 수 = 이 프리셋으로 만든 작업 공간 수
+		assertThat(fields.types().stream().filter(t -> t.id().equals(type.id())).findFirst().orElseThrow().spaceCount()).isEqualTo(1);
 	}
 
 	@Test
@@ -197,13 +192,6 @@ class CiraFieldIT {
 	}
 
 	@Test
-	@DisplayName("쓰는 프로젝트가 있는 타입은 삭제할 수 없다 (409)")
-	void deleteType_inUse_conflict() {
-		assertThatThrownBy(() -> fields.deleteType(type.id())).isInstanceOf(ResponseStatusException.class)
-			.hasMessageContaining("409");
-	}
-
-	@Test
 	@DisplayName("타입 세트에는 전역 필드를 바로 넣을 수 없다 (먼저 타입으로 가져온다)")
 	void typeSet_rejectsGlobalField() {
 		Field g = globalSelect("고객사", false);
@@ -243,23 +231,12 @@ class CiraFieldIT {
 	}
 
 	@Test
-	@DisplayName("다른 타입의 타입 필드는 가져올 수 없다")
-	void importToProject_otherTypeField_notFound() {
-		ProjectType other = fields.createType(new SaveType(uniq("기타"), null));
-		Field otherField = fields.createTypeField(other.id(), new SaveCustomField(uniq("다른"), "TEXT", false, null, null));
-		assertThatThrownBy(() -> fields.importToProject(project.getId(), id(otherField)))
+	@DisplayName("다른 프로젝트의 필드는 가져올 수 없다 (전역·프리셋 필드만)")
+	void importToProject_otherProjectField_notFound() {
+		ProjectResponse other = fixtures.project(type.typeNm());
+		Field theirs = fields.createProjectField(other.getId(), new SaveCustomField(uniq("남의"), "TEXT", false, null, null));
+		assertThatThrownBy(() -> fields.importToProject(project.getId(), id(theirs)))
 			.isInstanceOf(jakarta.persistence.EntityNotFoundException.class);
-	}
-
-	@Test
-	@DisplayName("라이브러리: 전역 + 이 타입의 타입 필드, 단 타입 세트에 이미 있는 것은 뺀다")
-	void library_excludesTypeSetFields() {
-		Field g = globalSelect("고객사", false);
-		Field inSet = typeSelect("세트");
-		Field libOnly = typeSelect("라이브러리");
-		fields.replaceTypeFields(type.id(), List.of(new TypeField(inSet.fieldKey(), true)));
-		assertThat(fields.library(project.getId())).extracting(i -> i.field().fieldKey())
-			.contains(g.fieldKey(), libOnly.fieldKey()).doesNotContain(inSet.fieldKey());
 	}
 
 	@Test
@@ -310,14 +287,23 @@ class CiraFieldIT {
 	}
 
 	@Test
-	@DisplayName("프로젝트 타입을 바꿔도 가져온 복사본은 남는다")
-	void changeType_keepsImportedCopies() {
-		Field copy = fields.importToProject(project.getId(), id(globalSelect("고객사", false)));
+	@DisplayName("V660: 프로젝트에는 타입이 없다 — 다른 프리셋의 필드도 가져오고, 프리셋을 지워도 공간 필드는 남는다")
+	void presetIsOnlyATemplate() {
 		ProjectType other = fields.createType(new SaveType(uniq("기타"), null));
-		UpdateProjectRequest req = new UpdateProjectRequest();
-		req.setProjectTypeId(other.id());
-		projects.updateProject(project.getId(), req);
-		assertThat(keys(fields.projectFields(project.getId()))).contains(copy.fieldKey());
+		Field otherField = fields.createTypeField(other.id(), new SaveCustomField(uniq("치수"), "TEXT", false, null, null));
+		assertThat(fields.library(project.getId())).extracting(i -> i.field().fieldKey()).contains(otherField.fieldKey());
+		Field imported = fields.importToProject(project.getId(), id(otherField));
+		assertThat(keys(fields.projectFields(project.getId()))).contains(imported.fieldKey());
+
+		Field preset = typeSelect("고객사");
+		fields.replaceTypeFields(type.id(), List.of(new TypeField(preset.fieldKey(), true)));
+		ProjectResponse fresh = fixtures.project(type.typeNm());
+		List<String> freshKeys = keys(fields.projectFields(fresh.getId()));
+		assertThat(freshKeys).doesNotContain(preset.fieldKey()).hasSize(5); // 고정 4 + 복사본 1
+
+		fields.deleteType(type.id()); // 이 프리셋으로 만든 공간이 있어도 지울 수 있다
+		assertThat(keys(fields.projectFields(fresh.getId()))).isEqualTo(freshKeys);
+		assertThat(jdbc.queryForObject("select count(*) from SN_CIRA_SPACE where PRESET_TYPE_ID=?", Integer.class, type.id())).isZero();
 	}
 
 	private List<String> titles(Sort sort) {

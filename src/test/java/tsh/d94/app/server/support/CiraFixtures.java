@@ -56,7 +56,7 @@ public class CiraFixtures {
 		request.setKey(key);
 		request.setName("IT " + key);
 		request.setDescription("integration test");
-		request.setProjectType(projectType);
+		request.setPresetTypeNm(projectType); // 기본 작업 공간 프리셋 이름
 		return projectService.createProject(request);
 	}
 

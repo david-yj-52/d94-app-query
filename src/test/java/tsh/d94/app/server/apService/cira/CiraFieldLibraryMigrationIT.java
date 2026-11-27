@@ -20,7 +20,6 @@ import org.springframework.jdbc.datasource.init.ScriptUtils;
 import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.SaveType;
 import tsh.d94.app.server.apService.cira.dto.CreateIssueRequest;
 import tsh.d94.app.server.apService.cira.dto.ProjectResponse;
-import tsh.d94.app.server.apService.cira.dto.UpdateProjectRequest;
 import tsh.d94.app.server.support.CiraFixtures;
 import tsh.d94.app.server.support.IntegrationTest;
 import tsh.d94.app.server.support.TestContexts;
@@ -81,13 +80,15 @@ class CiraFieldLibraryMigrationIT {
 
 	@AfterEach
 	void tearDown() {
+		jdbc.execute("alter table SN_CIRA_PROJECT drop column if exists PROJECT_TYPE_ID");
 		TestContexts.clear();
 	}
 
+	/** 옛 모양: V660 이 지운 SN_CIRA_PROJECT.PROJECT_TYPE_ID 를 되살려 V600 을 다시 돌린다 (tearDown 에서 다시 지움) */
 	private ProjectResponse withType(ProjectResponse p, String typeId) {
-		UpdateProjectRequest req = new UpdateProjectRequest();
-		req.setProjectTypeId(typeId);
-		return projects.updateProject(p.getId(), req);
+		jdbc.execute("alter table SN_CIRA_PROJECT add column if not exists PROJECT_TYPE_ID varchar(100)");
+		jdbc.update("update SN_CIRA_PROJECT set PROJECT_TYPE_ID=? where OBJ_ID=?", typeId, p.getId());
+		return p;
 	}
 
 	private String issue(ProjectResponse p) {
