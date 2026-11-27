@@ -21,9 +21,19 @@ public final class CiraFieldDto {
 
 	public record TypeField(String fieldKey, boolean defaultVisible) {}
 
-	public record ProjectType(String id, String typeNm, String descr, int sortOrd, int spaceCount, List<TypeField> fields) {}
+	/** 작업 공간 프리셋(구 프로젝트 타입). statuses·boardType = 새 공간에 복사할 기본 워크플로·보드 (V670) */
+	public record ProjectType(String id, String typeNm, String descr, int sortOrd, int spaceCount, List<TypeField> fields,
+		String boardType, List<PresetStatus> statuses) {}
 
-	public record SaveType(String typeNm, String descr) {}
+	/** 프리셋 기본 상태. 순서 = 배열 순서, 전이는 이웃끼리 앞뒤 + 처음 → 마지막. category = TODO | IN_PROGRESS | DONE */
+	public record PresetStatus(String name, String category) {}
+
+	/** boardType·statuses null = 그대로(새로 만들 때는 KANBAN · 기본 4단계) */
+	public record SaveType(String typeNm, String descr, String boardType, List<PresetStatus> statuses) {
+		public SaveType(String typeNm, String descr) {
+			this(typeNm, descr, null, null);
+		}
+	}
 
 	/** copyToTypeIds: 전역 필드를 만들 때만 — 그 타입들로 바로 복사 */
 	public record SaveCustomField(String fieldNm, String fieldType, Boolean required, List<String> options,

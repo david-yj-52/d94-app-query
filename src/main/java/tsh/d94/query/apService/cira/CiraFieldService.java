@@ -7,6 +7,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -29,6 +30,7 @@ import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.Catalog;
 import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.Field;
 import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.FieldKeys;
 import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.LibraryItem;
+import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.PresetStatus;
 import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.ProjectType;
 import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.SaveCustomField;
 import tsh.d94.app.server.apService.cira.dto.CiraFieldDto.SaveType;
@@ -94,7 +96,8 @@ public class CiraFieldService {
 	public List<ProjectType> types() {
 		return access.types(tenant()).stream()
 			.map(t -> new ProjectType(t.id(), t.typeNm(), t.descr(), t.sortOrd(), access.spacesUsingPreset(t.id()),
-				access.typeSet(t.id()).stream().map(f -> new TypeField(f.fieldKey(), f.defaultVisible())).toList()))
+				access.typeSet(t.id()).stream().map(f -> new TypeField(f.fieldKey(), f.defaultVisible())).toList(),
+				t.boardType(), presetStatuses(t)))
 			.toList();
 	}
 
@@ -102,6 +105,7 @@ public class CiraFieldService {
 	public ProjectType createType(SaveType req) {
 		String name = typeName(req, null);
 		String id = access.insertType(tenant(), name, req.descr());
+		saveWorkflow(id, req);
 		access.replaceTypeFields(id, List.of(
 			new CiraFieldAccess.TypeField("sys:priority", true), new CiraFieldAccess.TypeField("sys:assignee", true),
 			new CiraFieldAccess.TypeField("sys:modifiedAt", true)));
@@ -112,6 +116,7 @@ public class CiraFieldService {
 	public ProjectType updateType(String id, SaveType req) {
 		requireType(id);
 		access.updateType(id, typeName(req, id), req.descr());
+		saveWorkflow(id, req);
 		return type(id);
 	}
 
@@ -618,6 +623,58 @@ public class CiraFieldService {
 	}
 
 	// ── 내부 ────────────────────────────────────
+
+	/** 프리셋 기본 4단계 (statuses 를 따로 정하지 않은 프리셋) */
+	public static final List<PresetStatus> DEFAULT_PRESET_STATUSES = List.of(new PresetStatus("To Do", "TODO"),
+		new PresetStatus("In Progress", "IN_PROGRESS"), new PresetStatus("In Review", "IN_PROGRESS"), new PresetStatus("Done", "DONE"));
+	private static final Set<String> BOARD_TYPES = Set.of("KANBAN", "SCRUM");
+	private static final Set<String> STATUS_CATEGORIES = Set.of("TODO", "IN_PROGRESS", "DONE");
+
+	/** 새 공간에 복사할 프리셋 상태 (SpaceService) */
+	public List<PresetStatus> presetStatuses(CiraFieldAccess.ProjectType t) {
+		if (t == null || t.statusesJson() == null) {
+			return DEFAULT_PRESET_STATUSES;
+		}
+		try {
+			return List.of(JSON.readValue(t.statusesJson(), PresetStatus[].class));
+		} catch (Exception e) {
+			throw new IllegalStateException("프리셋 상태를 읽지 못했습니다: " + t.id(), e);
+		}
+	}
+
+	/** boardType·statuses 가 있으면 검증해 저장. 처음 상태는 TODO, DONE 하나 이상, 이름 1~30자 중복 없음, 2~10개 */
+	private void saveWorkflow(String id, SaveType req) {
+		if (req.boardType() == null && req.statuses() == null) {
+			return;
+		}
+		CiraFieldAccess.ProjectType cur = access.type(tenant(), id);
+		String board = req.boardType() != null ? req.boardType() : cur.boardType();
+		if (!BOARD_TYPES.contains(board)) {
+			throw new IllegalArgumentException("보드 유형은 KANBAN 또는 SCRUM 입니다: " + board);
+		}
+		String statusesJson = cur.statusesJson();
+		if (req.statuses() != null) {
+			List<PresetStatus> st = req.statuses();
+			if (st.size() < 2 || st.size() > 10) {
+				throw new IllegalArgumentException("상태는 2~10개입니다");
+			}
+			Set<String> names = new HashSet<>();
+			for (PresetStatus s : st) {
+				String n = s.name() == null ? "" : s.name().trim();
+				if (n.isEmpty() || n.length() > 30 || !names.add(n)) {
+					throw new IllegalArgumentException("상태 이름은 1~30자이고 겹치면 안 됩니다: " + n);
+				}
+				if (!STATUS_CATEGORIES.contains(s.category())) {
+					throw new IllegalArgumentException("상태 분류는 TODO, IN_PROGRESS, DONE 중 하나입니다: " + s.category());
+				}
+			}
+			if (!"TODO".equals(st.get(0).category()) || st.stream().noneMatch(s -> "DONE".equals(s.category()))) {
+				throw new IllegalArgumentException("첫 상태는 할 일(TODO)이고, 완료(DONE) 상태가 하나 이상 있어야 합니다");
+			}
+			statusesJson = writeJson(st.stream().map(s -> new PresetStatus(s.name().trim(), s.category())).toList());
+		}
+		access.updateTypeWorkflow(id, board, statusesJson);
+	}
 
 	private ProjectType type(String id) {
 		return types().stream().filter(t -> t.id().equals(id)).findFirst().orElseThrow();

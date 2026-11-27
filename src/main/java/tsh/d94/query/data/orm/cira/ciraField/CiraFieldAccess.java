@@ -24,7 +24,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class CiraFieldAccess {
 
-	public record ProjectType(String id, String typeNm, String descr, int sortOrd) {}
+	/** statusesJson null = 기본 4단계 (V670) */
+	public record ProjectType(String id, String typeNm, String descr, int sortOrd, String boardType, String statusesJson) {}
 
 	public record TypeField(String fieldKey, boolean defaultVisible) {}
 
@@ -47,18 +48,12 @@ public class CiraFieldAccess {
 	// ── 프로젝트 타입 ─────────────────────────────
 
 	public List<ProjectType> types(String tenant) {
-		return jdbc.query("select OBJ_ID, TYPE_NM, DESCR, SORT_ORD from SN_CIRA_PROJECT_TYPE where TENANT=? order by SORT_ORD, TYPE_NM",
-			(r, n) -> new ProjectType(r.getString(1), r.getString(2), r.getString(3), r.getInt(4)), tenant);
+		return jdbc.query("select OBJ_ID, TYPE_NM, DESCR, SORT_ORD, BOARD_TYPE, STATUSES::text from SN_CIRA_PROJECT_TYPE where TENANT=? order by SORT_ORD, TYPE_NM",
+			(r, n) -> new ProjectType(r.getString(1), r.getString(2), r.getString(3), r.getInt(4), r.getString(5), r.getString(6)), tenant);
 	}
 
 	public ProjectType type(String tenant, String id) {
 		return types(tenant).stream().filter(t -> t.id().equals(id)).findFirst().orElse(null);
-	}
-
-	/** 프리셋 기본 보드 유형 (V650). 없으면 KANBAN */
-	public String boardType(String typeId) {
-		return jdbc.queryForList("select BOARD_TYPE from SN_CIRA_PROJECT_TYPE where OBJ_ID=?", String.class, typeId).stream()
-			.findFirst().orElse("KANBAN");
 	}
 
 	public ProjectType typeByName(String tenant, String typeNm) {
@@ -76,6 +71,12 @@ public class CiraFieldAccess {
 
 	public void updateType(String id, String typeNm, String descr) {
 		jdbc.update("update SN_CIRA_PROJECT_TYPE set TYPE_NM=?, DESCR=?, MODIFIED_AT=now() where OBJ_ID=?", typeNm, descr, id);
+	}
+
+	/** 프리셋 기본 보드 유형·워크플로 (V670). statusesJson null = 기본 4단계 */
+	public void updateTypeWorkflow(String id, String boardType, String statusesJson) {
+		jdbc.update("update SN_CIRA_PROJECT_TYPE set BOARD_TYPE=?, STATUSES=?::jsonb, MODIFIED_AT=now() where OBJ_ID=?",
+			boardType, statusesJson, id);
 	}
 
 	/** 이 프리셋으로 만든 작업 공간 수 (참고용 — 만든 뒤에는 연결이 없다) */

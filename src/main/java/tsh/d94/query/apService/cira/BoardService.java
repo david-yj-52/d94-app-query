@@ -403,6 +403,7 @@ public class BoardService {
 				.avatarUrl(assignee.getAvatarUrl()).build()
 				: null)
 			.rankStr(rankStr)
+			.featureId(issue.getFeatureId())
 			.build();
 	}
 
