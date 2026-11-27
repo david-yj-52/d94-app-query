@@ -268,6 +268,7 @@ sequenceDiagram
 | `interfaces/controller/cira/CiraDocsController` | `/api/v1/projects/{id}/doc-rules[/{issueTypeId}]`, `/issues/{issueId}/docs`(GET 조회·POST 온디맨드 메인 생성), `/issues/{issueId}/docs/derive`, `/docs/notes/{noteId}/promote-to-cira` |
 
 - 자동화(`AutomationEventListener`)가 직접 쏜 이벤트는 무시한다(로그인 사용자·트랜잭션 없음). 진행 경과 시각은 `LOG_TZ`.
+- **Ayaan 연동(DOCS-28):** 설계·결과 문서 = Task 메인 노트, 승인은 CIRA. `AyaanService.transition`·`claim` 이 커밋된 뒤 `CiraDocsService.appendAyaanProgress(issueKey, …)` 로 `## 진행 경과` 에 "Ayaan 작업 시작/일시 정지/완료(resultSummary)/실패(failReason)/취소" 한 줄(공백 접고 300자, `AyaanService.oneLine`). 노트 기록 실패는 경고 로그만(Ayaan 진행을 막지 않음). 테스트 `CiraDocsIT.ayaanTask_progressInMainNote`.
 - 미구현: `[[D94-12]]` 이슈 키 링크 해석, 크로스 vault 링크(`TO_VAULT_ID`).
 
 ### Life Metric (삶의 수치화)

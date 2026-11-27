@@ -452,6 +452,11 @@ public class CiraDocsService {
 		return n;
 	}
 
+	/** Ayaan 작업 경과를 Task 메인 노트 "## 진행 경과" 에 한 줄 (DOCS-28). 이슈·메인 노트가 없으면 아무것도 하지 않는다 */
+	public void appendAyaanProgress(String issueKey, String text) {
+		issueAccess.findByIssueKey(issueKey).ifPresent(i -> appendProgress(i.getObjId(), "Ayaan " + text));
+	}
+
 	private void appendProgress(String issueId, String text) {
 		appendProgress(issueId, text, UnaryOperator.identity());
 	}
