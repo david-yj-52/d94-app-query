@@ -23,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 import tsh.d94.app.server.apService.docs.DocsDtos.DeriveRequest;
 import tsh.d94.app.server.apService.docs.DocsDtos.FolderRequest;
 import tsh.d94.app.server.apService.docs.DocsDtos.FolderResponse;
+import tsh.d94.app.server.apService.docs.DocsDtos.GraphResponse;
 import tsh.d94.app.server.apService.docs.DocsDtos.KindRequest;
 import tsh.d94.app.server.apService.docs.DocsDtos.LineageNode;
 import tsh.d94.app.server.apService.docs.DocsDtos.MoveFolderRequest;
@@ -160,6 +161,13 @@ public class DocsController {
 	@PutMapping("/notes/{id}/kind")
 	public ApiResponse<NoteResponse> changeKind(@PathVariable String id, @RequestBody KindRequest req) {
 		return ApiResponse.ok(evolve.changeKind(id, req.kind()));
+	}
+
+	/** 그래프 뷰: noteId 가 있으면 로컬 그래프(depth 단계), 없으면 vault 전체 */
+	@GetMapping("/graph")
+	public ApiResponse<GraphResponse> graph(@RequestParam(required = false) String vaultId,
+		@RequestParam(required = false) String noteId, @RequestParam(defaultValue = "1") int depth) {
+		return ApiResponse.ok(notes.graph(vaultId, noteId, depth));
 	}
 
 	@GetMapping("/notes/{id}/lineage")

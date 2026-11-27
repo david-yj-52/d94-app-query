@@ -170,6 +170,26 @@ class DocsFlowIT {
 	}
 
 	@Test
+	void graph_global_and_local() {
+		NoteResponse a = notes.create(note("A", "[[B]] [[없는 노트]]"));
+		NoteResponse b = notes.create(note("B", "[[C]]"));
+		NoteResponse c = notes.create(note("C", ""));
+		notes.create(note("외톨이", ""));
+
+		DocsDtos.GraphResponse all = notes.graph(null, null, 1);
+		assertThat(all.nodes()).extracting(DocsDtos.GraphNode::title).contains("A", "B", "C", "외톨이");
+		assertThat(all.links()).extracting(l -> l.source() + ">" + l.target())
+			.contains(a.id() + ">" + b.id(), b.id() + ">" + c.id()).hasSize(2); // 없는 노트 링크는 빠짐
+
+		// 로컬: B 에서 1단계 = A·B·C (방향 무시), A 에서 1단계 = A·B, 2단계 = A·B·C
+		assertThat(notes.graph(null, b.id(), 1).nodes()).extracting(DocsDtos.GraphNode::title).containsExactlyInAnyOrder("A", "B", "C");
+		assertThat(notes.graph(null, a.id(), 1).nodes()).extracting(DocsDtos.GraphNode::title).containsExactlyInAnyOrder("A", "B");
+		DocsDtos.GraphResponse two = notes.graph(null, a.id(), 2);
+		assertThat(two.nodes()).hasSize(3);
+		assertThat(two.links()).hasSize(2);
+	}
+
+	@Test
 	void versions_coalesceWithin5Minutes_sameTitle() {
 		NoteResponse n = notes.create(note("자동 저장", "v1"));
 		NoteResponse n2 = notes.update(n.id(), new NoteRequest(null, "v2", null, n.version()));
