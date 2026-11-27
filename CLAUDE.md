@@ -150,7 +150,7 @@ sequenceDiagram
 | `MessageOutboundController`     | `/util/message-outbound` | 메시지 수동 발행 유틸 |
 | `AuthController`                | `/api/v1/auth`           | lib-core `BaseAuthController`(register·login·refresh·logout) + `GET /public-key`. login·register 본문은 암호화 봉투 `{enc}` 만 받음 (아래 "자격 증명 암호화") |
 | `StudyController`               | `/api/v1/study`          | PDF 학습 뷰어 — 분할 업로드(`documents/uploads`, 조각 768KB), 문서·목차·페이지·그림, 단어장(`terms`), 마킹·노트(`annotations`). 아래 "PDF 학습 뷰어" |
-| `DocsController`                | `/api/v1/docs`           | Docs 다중 vault(`GET /vaults`, 목록·Task·titles 에 `vaultId`, 생략·`ALL`=통합 뷰) — 폴더·노트 CRUD·이동, 목록 필터·titles·by-title, 버전·백링크, 진화(derive·kind·lineage), Task, RAG 지식화·검색. 아래 "Docs" |
+| `DocsController`                | `/api/v1/docs`           | Docs 다중 vault(`GET /vaults`, 목록·Task·titles 에 `vaultId`, 생략·`ALL`=통합 뷰) — 폴더·노트 CRUD·이동, 목록 필터·titles·by-title, 버전·백링크, 진화(derive·kind·lineage), 그래프(`GET /graph?vaultId=&noteId=&depth=`), Task, RAG 지식화·검색. 아래 "Docs" |
 | `LifeMetricController`          | `/api/v1/life-metric`    | Life Metric(삶의 수치화) — 템플릿, 지표 CRUD, 기준값(`inputs`), 시계열 로그(`logs`), 평가(`evaluate`), 저장 전 미리보기(`preview`). 아래 "Life Metric" |
 | `InterfaceTestController`       | `/api/v1/interface-tests` | 인터페이스(통신) 테스트 CRUD — GET·HEAD·POST(201)·PUT·PATCH·DELETE(204) |
 | `GlobalExceptionHandler`        | —                        | 전역 예외 처리        |
@@ -250,11 +250,11 @@ sequenceDiagram
 | 클래스 | 역할 |
 |---|---|
 | `apService/docs/DocsMarkdownIndexer` | 본문에서 frontmatter(kind·stream·origin·tags)·`[[링크]]`·`#태그`·`- [ ]/[/]/[x]`(+`📅` 마감) 추출. `renameLinks`·`setFrontmatter` |
-| `apService/docs/DocsNoteService` | 노트 CRUD. 저장마다 버전 1건 + 색인 교체, 제목 변경 시 백링크 노트의 `[[옛 제목]]` 치환, `version` 불일치 409, 제목에 `[]|#` 금지 |
+| `apService/docs/DocsNoteService` | 노트 CRUD. 저장마다 버전 1건 + 색인 교체, 제목 변경 시 백링크 노트의 `[[옛 제목]]` 치환, `version` 불일치 409, 제목에 `[]|#` 금지. `graph`: vault 전체 또는 noteId 기준 depth(1~5) 로컬 그래프(링크 방향 무시, 없는 노트 링크 제외) |
 | `apService/docs/DocsFolderService` | 폴더 트리. 같은 상위 안 이름 중복 409, 자기 하위로 이동 400, 비어 있지 않은 폴더 삭제 409 |
 | `apService/docs/DocsEvolveService` | 승격(frontmatter kind), 파생(origin·stream 붙은 새 노트), Task 상태(그 줄만 치환, 줄이 바뀌었으면 409), Task→노트 승격, 계보(재귀 CTE) |
 | `apService/docs/DocsImageService` | 붙여넣은 이미지: `POST /images`(octet-stream, 5MB, 앞 바이트로 PNG·JPEG·GIF·WebP 만 — SVG·HTML 거부) → MinIO `docs/images/{SHA-256(소유자) 앞 16바이트}/{uuid}`, `GET /images/{id}` 는 로그인 소유자 경로에서만 찾음(남의 것 404), `nosniff`·private 30일 캐시. 메타 테이블 없음 |
-| `data/orm/docs/docsIndex/DocsIndexAccess` | 버전·링크·태그·Task·목록·백링크·계보 SQL (JdbcTemplate). `addVersion` 은 같은 사람이 5분 안에 같은 제목으로 다시 저장하면 직전 이력을 바꿔치기(자동 저장 이력 폭증 방지, 제목 변경은 남김) |
+| `data/orm/docs/docsIndex/DocsIndexAccess` | 버전·링크·태그·Task·목록·백링크·계보·그래프(노트 5000개 상한) SQL (JdbcTemplate). `addVersion` 은 같은 사람이 5분 안에 같은 제목으로 다시 저장하면 직전 이력을 바꿔치기(자동 저장 이력 폭증 방지, 제목 변경은 남김) |
 
 - 테이블 `SN_DOCS_FOLDER`·`SN_DOCS_NOTE`(엔티티, `@Audited` 미사용, 물리 삭제) + `SN_DOCS_NOTE_VER`·`LINK`·`TAG`·`TASK`(JDBC 전용, 노트 삭제 시 CASCADE) — `V570`. 엔티티 컬럼 길이는 V570 과 같게 둔다(`ddl-auto=update` 가 엔티티 기준으로 ALTER).
 - 접근 범위 = vault(`SN_DOCS_VAULT`, V620). `PRIVATE` 는 소유자 이메일만, `TEAM` 은 그 CIRA 프로젝트의 Usable 멤버만(`DocsVaultService`), 못 보면 404. `OWNER_ID` 는 만든 사람. 제목·폴더 이름은 vault 안에서 유일, 링크·백링크·계보도 vault 안에서만 맞춘다(크로스 vault 링크 미구현). 노트를 다른 vault 폴더로 옮기기는 400.
@@ -271,6 +271,7 @@ sequenceDiagram
 | `interfaces/controller/cira/CiraDocsController` | `/api/v1/projects/{id}/doc-rules[/{issueTypeId}]`, `/issues/{issueId}/docs`(GET 조회·POST 온디맨드 메인 생성), `/issues/{issueId}/docs/derive`, `/docs/notes/{noteId}/promote-to-cira` |
 
 - 자동화(`AutomationEventListener`)가 직접 쏜 이벤트는 무시한다(로그인 사용자·트랜잭션 없음). 진행 경과 시각은 `LOG_TZ`.
+- **Ayaan 연동(DOCS-28):** 설계·결과 문서 = Task 메인 노트, 승인은 CIRA. `AyaanService.transition`·`claim` 이 커밋된 뒤 `CiraDocsService.appendAyaanProgress(issueKey, …)` 로 `## 진행 경과` 에 "Ayaan 작업 시작/일시 정지/완료(resultSummary)/실패(failReason)/취소" 한 줄(공백 접고 300자, `AyaanService.oneLine`). 노트 기록 실패는 경고 로그만(Ayaan 진행을 막지 않음). 테스트 `CiraDocsIT.ayaanTask_progressInMainNote`.
 - 미구현: `[[D94-12]]` 이슈 키 링크 해석, 크로스 vault 링크(`TO_VAULT_ID`).
 
 ### Life Metric (삶의 수치화)

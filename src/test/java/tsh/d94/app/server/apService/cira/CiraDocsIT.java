@@ -9,6 +9,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import tsh.d94.app.server.apService.ayaan.AyaanService;
+import tsh.d94.app.server.apService.ayaan.dto.AyaanDtos;
 import tsh.d94.app.server.apService.cira.CiraDocsService.DeriveFromIssueRequest;
 import tsh.d94.app.server.apService.cira.CiraDocsService.DocRuleDto;
 import tsh.d94.app.server.apService.cira.CiraDocsService.IssueDocsResponse;
@@ -40,6 +42,8 @@ class CiraDocsIT {
 	@Autowired DocsVaultService vaults;
 	@Autowired DocsNoteService notes;
 	@Autowired DocsFolderService folders;
+	@Autowired AyaanService ayaan;
+	@Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
 
 	private String adminEmail;
 	private GsUserModel dev;
@@ -139,6 +143,20 @@ class CiraDocsIT {
 		NoteResponse main = notes.get(ciraDocs.docs(project.getId(), issue.getId()).main().noteId());
 		assertThat(main.origin()).isEqualTo("아이디어 A");
 		assertThat(main.vaultId()).isNotEqualTo(idea.vaultId());
+	}
+
+	@Test
+	void ayaanTask_progressInMainNote() {
+		IssueResponse issue = fixtures.issue(project.getId(), "Ayaan 연동", null);
+		String mainId = ciraDocs.docs(project.getId(), issue.getId()).main().noteId();
+		String id = java.util.UUID.randomUUID().toString();
+		jdbc.update("INSERT INTO SN_AYN_TASK (OBJ_ID, ISSUE_KEY, SOURCE, PROJECT_KEY, WORKSPACE_PATH, PROMPT, TOOL_CD, STATUS, RESUME_COUNT, CREATED_AT, "
+			+ "SRV_ID, TENANT, TRACE_ID, EVNT_NM, PREV_EVNT_NM, USE_STAT_CD) VALUES (?, ?, 'API', 'AY', ?, 'p', 'CLAUDE', 'RUNNING', 0, now(), "
+			+ "'app-server', 'TSH', 'IT', 'ItFixture', 'None', 'Usable')", id, issue.getIssueKey(), "/ws/" + id);
+
+		ayaan.transition(id, new AyaanDtos.TransitionReq("RUNNING", "DONE", java.util.Map.of("resultSummary", "구현 완료\n테스트   통과")));
+		assertThat(notes.get(mainId).content()).contains("Ayaan 작업 완료 (CLAUDE): 구현 완료 테스트 통과");
+		assertThat(AyaanService.oneLine("a".repeat(400))).hasSize(301).endsWith("…");
 	}
 
 	@Test

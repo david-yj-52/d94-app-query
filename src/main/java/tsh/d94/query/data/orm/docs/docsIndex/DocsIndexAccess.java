@@ -41,6 +41,9 @@ public class DocsIndexAccess {
 	public record LineageRow(String id, String title, String kind, String stream, String originTitle) {
 	}
 
+	public record GraphEdge(String fromId, String toId, String rel) {
+	}
+
 	// ── 색인 ──
 
 	/** 노트 하나의 색인을 통째로 바꾼다 (저장할 때마다) */
@@ -200,6 +203,22 @@ public class DocsIndexAccess {
 			select distinct on (OBJ_ID) OBJ_ID, TITLE, KIND, STREAM, ORIGIN from t order by OBJ_ID, D""",
 			(r, n) -> new LineageRow(r.getString(1), r.getString(2), r.getString(3), r.getString(4), r.getString(5)),
 			noteId, vaultId, vaultId, vaultId);
+	}
+
+	// ── 그래프 ──
+
+	/** ponytail: vault 하나당 노트 5000개 상한. 넘으면 페이지·서버 측 로컬 그래프로 */
+	public List<NoteRow> graphNotes(Collection<String> vaultIds) {
+		return jdbc.query("select " + NOTE_COLS + " from SN_DOCS_NOTE n where n.VAULT_ID = any(?) order by n.TITLE limit 5000",
+			DocsIndexAccess::noteRow, (Object) arr(vaultIds));
+	}
+
+	/** 같은 vault 안 노트끼리 이어진 링크(link·origin). 없는 노트·자기 자신 링크는 뺀다 */
+	public List<GraphEdge> graphEdges(Collection<String> vaultIds) {
+		return jdbc.query("select distinct l.FROM_ID, t.OBJ_ID, l.REL from SN_DOCS_LINK l "
+				+ "join SN_DOCS_NOTE f on f.OBJ_ID=l.FROM_ID and f.VAULT_ID = any(?) "
+				+ "join SN_DOCS_NOTE t on t.VAULT_ID=f.VAULT_ID and t.TITLE=l.TO_TITLE where t.OBJ_ID<>l.FROM_ID",
+			(r, n) -> new GraphEdge(r.getString(1), r.getString(2), r.getString(3)), (Object) arr(vaultIds));
 	}
 
 	private static final String NOTE_COLS = "n.OBJ_ID,n.VAULT_ID,n.TITLE,n.FOLDER_ID,n.KIND,n.STREAM,n.MODIFIED_AT";

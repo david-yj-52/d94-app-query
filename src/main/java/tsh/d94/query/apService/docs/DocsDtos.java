@@ -80,6 +80,15 @@ public final class DocsDtos {
 	public record TaskStatusRequest(String status) {
 	}
 
+	public record GraphNode(String id, String vaultId, String title, String kind, String stream) {
+	}
+
+	public record GraphLink(String source, String target, String rel) {
+	}
+
+	public record GraphResponse(List<GraphNode> nodes, List<GraphLink> links) {
+	}
+
 	public record LineageNode(String id, String title, String kind, String stream, String origin) {
 	}
 }

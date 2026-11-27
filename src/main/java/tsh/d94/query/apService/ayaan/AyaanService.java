@@ -18,6 +18,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import tsh.d94.app.server.apService.ayaan.dto.AyaanDtos.*;
 import tsh.d94.app.server.apService.mdm.SettingService;
 import tsh.d94.app.server.data.orm.ayaan.AynRefBase;
@@ -58,6 +59,7 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextImpl;
 
 /** ayaan 내부 API 로직. 상태 전이·선점·lease 는 DB 의 조건부 UPDATE 한 문장으로 경쟁을 막는다. */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AyaanService {
@@ -83,6 +85,7 @@ public class AyaanService {
 	private final IssueService issueService;
 	private final tsh.d94.app.server.data.orm.cira.ciraDocs.CiraDocsAccess ciraDocsAccess;
 	private final tsh.d94.app.server.data.orm.docs.docsNote.SnDocsNoteAccess noteAccess;
+	private final tsh.d94.app.server.apService.cira.CiraDocsService ciraDocs;
 	private final GsUserAccess userAccess;
 	private final ObjectMapper om;
 	private final PlatformTransactionManager txManager;
@@ -220,10 +223,45 @@ public class AyaanService {
 			throw new IllegalArgumentException("expectedStatus and nextStatus are required");
 		}
 		try {
-			return new TransactionTemplate(txManager).execute(tx -> doTransition(id, req));
+			return recordProgress(new TransactionTemplate(txManager).execute(tx -> doTransition(id, req)));
 		} catch (DataIntegrityViolationException e) {
 			throw new AyaanConflictException("transition to " + req.nextStatus() + " violates a uniqueness rule (workspace busy or active issue task)", null);
 		}
+	}
+
+	/**
+	 * 설계·결과 문서 = Task 메인 노트 (DOCS-28): 시작·정지·완료·실패·취소를 "## 진행 경과" 에 남긴다. 승인은 CIRA 에서(기존 방향).
+	 * 전이가 커밋된 뒤 따로 쓰고, 노트 기록 실패는 경고만 — Ayaan 진행을 막지 않는다.
+	 */
+	private TaskDto recordProgress(TaskDto t) {
+		if (t == null || t.issueKey() == null) {
+			return t;
+		}
+		String text = switch (t.status()) {
+			case "RUNNING" -> "작업 시작 (" + t.toolCd() + ")";
+			case "PAUSED" -> "작업 일시 정지: " + oneLine(t.pauseReason());
+			case "DONE" -> "작업 완료 (" + t.toolCd() + "): " + oneLine(t.resultSummary());
+			case "FAILED" -> "작업 실패: " + oneLine(t.failReason());
+			case "CANCELLED" -> "작업 취소";
+			default -> null;
+		};
+		if (text != null) {
+			try {
+				ciraDocs.appendAyaanProgress(t.issueKey(), text);
+			} catch (RuntimeException e) {
+				log.warn("ayaan progress note failed for {}: {}", t.issueKey(), e.toString());
+			}
+		}
+		return t;
+	}
+
+	/** ponytail: 진행 경과는 한 줄 — 공백을 접고 300자에서 자름. 전문은 Ayaan 작업 화면 */
+	public static String oneLine(String s) {
+		if (s == null || s.isBlank()) {
+			return "-";
+		}
+		String t = s.strip().replaceAll("\\s+", " ");
+		return t.length() > 300 ? t.substring(0, 300) + "…" : t;
 	}
 
 	private TaskDto doTransition(String id, TransitionReq req) {
@@ -267,7 +305,7 @@ public class AyaanService {
 				List<String> ids = taskAccess.claim(req.leaseOwner(), req.leaseSeconds(), req.toolCd(), req.graceSeconds());
 				return ids.isEmpty() ? null : ids.get(0);
 			});
-			return id == null ? null : TaskDto.from(findTask(id));
+			return id == null ? null : recordProgress(TaskDto.from(findTask(id)));
 		} catch (DataIntegrityViolationException e) {
 			return null;
 		}

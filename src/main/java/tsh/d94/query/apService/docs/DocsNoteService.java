@@ -12,6 +12,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
+import tsh.d94.app.server.apService.docs.DocsDtos.GraphLink;
+import tsh.d94.app.server.apService.docs.DocsDtos.GraphNode;
+import tsh.d94.app.server.apService.docs.DocsDtos.GraphResponse;
 import tsh.d94.app.server.apService.docs.DocsDtos.LinkRef;
 import tsh.d94.app.server.apService.docs.DocsDtos.MoveNoteRequest;
 import tsh.d94.app.server.apService.docs.DocsDtos.NoteRequest;
@@ -105,6 +108,35 @@ public class DocsNoteService {
 		String content = req.content() == null ? n.getContent() : req.content();
 		writeRenamed(n, title, content);
 		return toResponse(n);
+	}
+
+	/**
+	 * 그래프: noteId 가 없으면 vault(생략·ALL = 접근 가능한 전체)의 모든 노트·링크,
+	 * 있으면 그 노트의 vault 에서 depth(1~5) 단계 안에 이어진 노트만 (로컬 그래프, 링크 방향 무시).
+	 */
+	public GraphResponse graph(String vaultId, String noteId, int depth) {
+		List<String> scope = noteId == null ? vaults.scope(vaultId) : List.of(requireOwned(noteId).getVaultId());
+		List<GraphLink> links = index.graphEdges(scope).stream().map(e -> new GraphLink(e.fromId(), e.toId(), e.rel())).toList();
+		Set<String> keep = null;
+		if (noteId != null) {
+			keep = new HashSet<>(Set.of(noteId));
+			Set<String> frontier = Set.of(noteId);
+			for (int d = 0; d < Math.max(1, Math.min(depth, 5)) && !frontier.isEmpty(); d++) {
+				Set<String> next = new HashSet<>();
+				for (GraphLink l : links) {
+					if (frontier.contains(l.source())) next.add(l.target());
+					if (frontier.contains(l.target())) next.add(l.source());
+				}
+				next.removeAll(keep);
+				keep.addAll(next);
+				frontier = next;
+			}
+		}
+		Set<String> k = keep;
+		List<GraphNode> nodes = index.graphNotes(scope).stream().filter(r -> k == null || k.contains(r.id()))
+			.map(r -> new GraphNode(r.id(), r.vaultId(), r.title(), r.kind(), r.stream())).toList();
+		Set<String> ids = new HashSet<>(nodes.stream().map(GraphNode::id).toList());
+		return new GraphResponse(nodes, links.stream().filter(l -> ids.contains(l.source()) && ids.contains(l.target())).toList());
 	}
 
 	/** 권한·version 검사 없이 제목만 바꾼다 (CIRA 이슈 제목 동기화). 링크 치환은 update 와 같다 */
