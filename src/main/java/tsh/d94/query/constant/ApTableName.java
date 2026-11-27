@@ -12,6 +12,7 @@ public class ApTableName {
 	public static final String SN_SETTING = "SN_SETTING";
 	public static final String SN_API_TOKEN = "SN_API_TOKEN";
 	public static final String SN_CIRA_PROJECT = "SN_CIRA_PROJECT";
+	public static final String SN_CIRA_SPACE = "SN_CIRA_SPACE";
 	public static final String SN_CIRA_PROJECT_MEMBER = "SN_CIRA_PROJECT_MEMBER";
 	public static final String SN_CIRA_SPRINT = "SN_CIRA_SPRINT";
 	public static final String SN_CIRA_SPRINT_METRICS = "SN_CIRA_SPRINT_METRICS";

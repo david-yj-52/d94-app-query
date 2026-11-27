@@ -18,10 +18,6 @@ import tsh.d94.app.server.apService.cira.dto.UpdateProjectRequest;
 import tsh.d94.app.server.apService.cira.dto.UpdateTransitionsRequest;
 import tsh.d94.app.server.apService.cira.dto.WorkflowStatusResponse;
 import tsh.d94.app.server.apService.cira.dto.WorkflowTransitionResponse;
-import tsh.d94.app.server.data.orm.cira.ciraBoard.SnCiraBoardAccess;
-import tsh.d94.app.server.data.orm.cira.ciraBoard.SnCiraBoardModel;
-import tsh.d94.app.server.data.orm.cira.ciraBoardColumn.SnCiraBoardColumnAccess;
-import tsh.d94.app.server.data.orm.cira.ciraBoardColumn.SnCiraBoardColumnModel;
 import tsh.d94.app.server.data.orm.cira.ciraIssueStatus.SnCiraIssueStatusAccess;
 import tsh.d94.app.server.data.orm.cira.ciraIssueStatus.SnCiraIssueStatusModel;
 import tsh.d94.app.server.data.orm.cira.ciraIssueTransition.SnCiraIssueTransitionAccess;
@@ -48,9 +44,9 @@ public class ProjectService {
 	private final GsUserAccess userAccess;
 	private final SnCiraIssueStatusAccess issueStatusAccess;
 	private final SnCiraIssueTransitionAccess issueTransitionAccess;
-	private final SnCiraBoardAccess boardAccess;
-	private final SnCiraBoardColumnAccess boardColumnAccess;
 	private final CiraFieldService fieldService;
+	private final SpaceService spaceService;
+	private final SpaceGuard spaceGuard;
 
 	@Transactional
 	public ProjectResponse createProject(CreateProjectRequest request) {
@@ -96,93 +92,10 @@ public class ProjectService {
 
 		projectMemberAccess.save(member);
 
-		initDefaultWorkflow(project.getObjId());
+		// 타입 강제 대신: 고른 타입은 기본 작업 공간의 스타터 프리셋 (V650)
+		spaceService.createDefault(project.getObjId(), request.getDefaultSpaceName(), type.id(), owner.getObjId());
 
 		return mapToResponse(project);
-	}
-
-	/** 새 프로젝트는 타입과 상관없이 칸반 보드 하나로 시작한다 (설계 5.4, 타입별 View 는 3단계) */
-	private void initDefaultWorkflow(String projectId) {
-		SnCiraIssueStatusModel todo = createStatus(projectId, "To Do", "TODO", "#DFE1E6", (short)1);
-		SnCiraIssueStatusModel inProgress = createStatus(projectId, "In Progress", "IN_PROGRESS", "#0052CC", (short)2);
-		SnCiraIssueStatusModel inReview = createStatus(projectId, "In Review", "IN_PROGRESS", "#FF991F", (short)3);
-		SnCiraIssueStatusModel done = createStatus(projectId, "Done", "DONE", "#00875A", (short)4);
-
-		createTransition(projectId, todo.getObjId(), inProgress.getObjId());
-		createTransition(projectId, todo.getObjId(), done.getObjId());
-		createTransition(projectId, inProgress.getObjId(), inReview.getObjId());
-		createTransition(projectId, inProgress.getObjId(), todo.getObjId());
-		createTransition(projectId, inReview.getObjId(), done.getObjId());
-		createTransition(projectId, inReview.getObjId(), inProgress.getObjId());
-
-		SnCiraBoardModel board = SnCiraBoardModel.builder()
-			.projectId(projectId)
-			.boardNm("Default Board")
-			.boardType("KANBAN")
-			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(TenantContext.get())
-			.traceId("INIT-PROJ")
-			.useStatCd(UseStatCd.Usable)
-			.evtNm("CreateDefaultBoard")
-			.prevEvntNm("None")
-			.build();
-		boardAccess.save(board);
-
-		createBoardColumn(board.getObjId(), todo.getObjId(), "To Do", (short)1);
-		createBoardColumn(board.getObjId(), inProgress.getObjId(), "In Progress", (short)2);
-		createBoardColumn(board.getObjId(), inReview.getObjId(), "In Review", (short)3);
-		createBoardColumn(board.getObjId(), done.getObjId(), "Done", (short)4);
-	}
-
-	private SnCiraIssueStatusModel createStatus(String projectId, String statusNm, String category, String colorCd,
-		short sortOrd) {
-		SnCiraIssueStatusModel status = SnCiraIssueStatusModel.builder()
-			.projectId(projectId)
-			.statusNm(statusNm)
-			.category(category)
-			.colorCd(colorCd)
-			.sortOrd(sortOrd)
-			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(TenantContext.get())
-			.traceId("INIT-PROJ")
-			.useStatCd(UseStatCd.Usable)
-			.evtNm("CreateStatus")
-			.prevEvntNm("None")
-			.build();
-		issueStatusAccess.save(status);
-		return status;
-	}
-
-	private void createTransition(String projectId, String fromStatusId, String toStatusId) {
-		SnCiraIssueTransitionModel transition = SnCiraIssueTransitionModel.builder()
-			.projectId(projectId)
-			.fromStatusId(fromStatusId)
-			.toStatusId(toStatusId)
-			.allowYn("Y")
-			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(TenantContext.get())
-			.traceId("INIT-PROJ")
-			.useStatCd(UseStatCd.Usable)
-			.evtNm("CreateTransition")
-			.prevEvntNm("None")
-			.build();
-		issueTransitionAccess.save(transition);
-	}
-
-	private void createBoardColumn(String boardId, String statusId, String columnNm, short sortOrd) {
-		SnCiraBoardColumnModel column = SnCiraBoardColumnModel.builder()
-			.boardId(boardId)
-			.statusId(statusId)
-			.columnNm(columnNm)
-			.sortOrd(sortOrd)
-			.srvId(ApplicationProperties.getApplicationServiceName())
-			.tenant(TenantContext.get())
-			.traceId("INIT-PROJ")
-			.useStatCd(UseStatCd.Usable)
-			.evtNm("CreateBoardColumn")
-			.prevEvntNm("None")
-			.build();
-		boardColumnAccess.save(column);
 	}
 
 	public List<ProjectResponse> getMyProjects() {
@@ -357,8 +270,14 @@ public class ProjectService {
 		projectMemberAccess.delete(member.getObjId());
 	}
 
+	// ── 워크플로 (V650: 공간 소유. spaceId null = 기본 공간, 수정은 프로젝트 ADMIN 또는 공간 관리자) ──
+
 	public List<WorkflowStatusResponse> getWorkflowStatuses(String projectId) {
-		return issueStatusAccess.findByProjectId(projectId)
+		return getWorkflowStatuses(projectId, null);
+	}
+
+	public List<WorkflowStatusResponse> getWorkflowStatuses(String projectId, String spaceId) {
+		return issueStatusAccess.findBySpaceId(spaceGuard.resolve(projectId, spaceId).getObjId())
 			.stream()
 			.filter(s -> UseStatCd.Usable.equals(s.getUseStatCd()))
 			.map(this::mapToStatusResponse)
@@ -367,9 +286,14 @@ public class ProjectService {
 
 	@Transactional
 	public WorkflowStatusResponse addWorkflowStatus(String projectId, AddStatusRequest request) {
-		validateAdminAccess(projectId);
+		return addWorkflowStatus(projectId, null, request);
+	}
 
-		issueStatusAccess.findByProjectIdAndStatusNm(projectId, request.getStatusNm())
+	@Transactional
+	public WorkflowStatusResponse addWorkflowStatus(String projectId, String spaceId, AddStatusRequest request) {
+		String sid = spaceGuard.requireManager(spaceGuard.resolve(projectId, spaceId)).getObjId();
+
+		issueStatusAccess.findBySpaceIdAndStatusNm(sid, request.getStatusNm())
 			.filter(s -> UseStatCd.Usable.equals(s.getUseStatCd()))
 			.ifPresent(s -> {
 				throw new IllegalStateException("Status already exists: " + request.getStatusNm());
@@ -377,6 +301,7 @@ public class ProjectService {
 
 		SnCiraIssueStatusModel status = SnCiraIssueStatusModel.builder()
 			.projectId(projectId)
+			.spaceId(sid)
 			.statusNm(request.getStatusNm())
 			.category(request.getCategory())
 			.colorCd(request.getColorCd())
@@ -395,15 +320,14 @@ public class ProjectService {
 
 	@Transactional
 	public void deleteWorkflowStatus(String projectId, String statusId) {
-		validateAdminAccess(projectId);
-
 		SnCiraIssueStatusModel status = issueStatusAccess.findById(statusId);
 		if (!projectId.equals(status.getProjectId())) {
 			throw new EntityNotFoundException("Status not found in project: " + statusId);
 		}
+		spaceGuard.requireManager(spaceGuard.resolve(projectId, status.getSpaceId()));
 
 		// 해당 상태가 관련된 전이 규칙도 함께 삭제
-		issueTransitionAccess.findByProjectId(projectId)
+		issueTransitionAccess.findBySpaceId(status.getSpaceId())
 			.stream()
 			.filter(t -> UseStatCd.Usable.equals(t.getUseStatCd()))
 			.filter(t -> statusId.equals(t.getFromStatusId()) || statusId.equals(t.getToStatusId()))
@@ -413,7 +337,11 @@ public class ProjectService {
 	}
 
 	public List<WorkflowTransitionResponse> getWorkflowTransitions(String projectId) {
-		return issueTransitionAccess.findByProjectId(projectId)
+		return getWorkflowTransitions(projectId, null);
+	}
+
+	public List<WorkflowTransitionResponse> getWorkflowTransitions(String projectId, String spaceId) {
+		return issueTransitionAccess.findBySpaceId(spaceGuard.resolve(projectId, spaceId).getObjId())
 			.stream()
 			.filter(t -> UseStatCd.Usable.equals(t.getUseStatCd()))
 			.map(this::mapToTransitionResponse)
@@ -423,20 +351,35 @@ public class ProjectService {
 	@Transactional
 	public List<WorkflowTransitionResponse> updateWorkflowTransitions(String projectId,
 		UpdateTransitionsRequest request) {
-		validateAdminAccess(projectId);
+		return updateWorkflowTransitions(projectId, null, request);
+	}
 
-		// 기존 전이 규칙 전체 삭제 (soft delete)
-		issueTransitionAccess.findByProjectId(projectId)
+	/** 공간 전이 규칙 전체 교체. 그 공간의 상태끼리만 */
+	@Transactional
+	public List<WorkflowTransitionResponse> updateWorkflowTransitions(String projectId, String spaceId,
+		UpdateTransitionsRequest request) {
+		String sid = spaceGuard.requireManager(spaceGuard.resolve(projectId, spaceId)).getObjId();
+		java.util.Set<String> own = issueStatusAccess.findBySpaceId(sid).stream()
+			.filter(s -> UseStatCd.Usable.equals(s.getUseStatCd()))
+			.map(SnCiraIssueStatusModel::getObjId)
+			.collect(Collectors.toSet());
+		request.getTransitions().forEach(item -> {
+			if (!own.contains(item.getFromStatusId()) || !own.contains(item.getToStatusId())) {
+				throw new IllegalArgumentException("이 작업 공간의 상태가 아닙니다");
+			}
+		});
+
+		issueTransitionAccess.findBySpaceId(sid)
 			.stream()
 			.filter(t -> UseStatCd.Usable.equals(t.getUseStatCd()))
 			.forEach(t -> issueTransitionAccess.delete(t.getObjId()));
 
-		// 새 전이 규칙 생성
 		return request.getTransitions()
 			.stream()
 			.map(item -> {
 				SnCiraIssueTransitionModel transition = SnCiraIssueTransitionModel.builder()
 					.projectId(projectId)
+					.spaceId(sid)
 					.fromStatusId(item.getFromStatusId())
 					.toStatusId(item.getToStatusId())
 					.allowYn("Y")

@@ -18,7 +18,7 @@ import lombok.experimental.SuperBuilder;
 @Table(
 	name = ApTableName.SN_CIRA_ISSUE_STATUS,
 	uniqueConstraints = {
-		@UniqueConstraint(name = SnCiraIssueStatusModel.UK01, columnNames = {"PROJECT_ID", "STATUS_NM"})
+		@UniqueConstraint(name = SnCiraIssueStatusModel.UK02, columnNames = {"SPACE_ID", "STATUS_NM"})
 	}
 )
 @Getter
@@ -28,10 +28,13 @@ import lombok.experimental.SuperBuilder;
 @Audited
 public class SnCiraIssueStatusModel extends BaseModel {
 
-	public static final String UK01 = "uk_ciraIssueStatus_01";
+	public static final String UK02 = "uk_ciraIssueStatus_02";
 
 	@Column(name = "PROJECT_ID", length = 100)
 	private String projectId;
+
+	@Column(name = "SPACE_ID", length = 100)
+	private String spaceId;
 
 	@Column(name = "STATUS_NM", length = 50, nullable = false)
 	private String statusNm;

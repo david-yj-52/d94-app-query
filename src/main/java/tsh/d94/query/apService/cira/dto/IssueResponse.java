@@ -29,6 +29,12 @@ public class IssueResponse {
 	private UserResponse assignee;
 	private UserResponse reporter;
 	private String projectId;
+	/** null = 공통 레이어 (COMMON Feature) */
+	private String spaceId;
+	private String featureScope;
+	private String featureId;
+	/** 단건 조회만: 연결된 Docs 메인 노트 (content 는 그 본문) */
+	private String mainNoteId;
 	private String sprintId;
 	private LocalDate dueDt;
 	private LocalDateTime startedAt;

@@ -33,6 +33,18 @@ public class SnCiraIssueModel extends BaseModel {
 	@Column(name = "PROJECT_ID", length = 100, nullable = false)
 	private String projectId;
 
+	/** 작업 공간. NULL = 공통 레이어 (COMMON Feature) */
+	@Column(name = "SPACE_ID", length = 100)
+	private String spaceId;
+
+	/** Feature 만: COMMON | UNIT */
+	@Column(name = "FEATURE_SCOPE", length = 20)
+	private String featureScope;
+
+	/** Task → Feature, UNIT Feature → COMMON Feature */
+	@Column(name = "FEATURE_ID", length = 100)
+	private String featureId;
+
 	@Column(name = "SPRINT_ID", length = 100)
 	private String sprintId;
 

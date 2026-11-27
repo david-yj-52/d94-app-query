@@ -40,7 +40,6 @@ import tsh.d94.app.server.data.orm.cira.ciraField.CiraFieldAccess;
 import tsh.d94.app.server.data.orm.cira.ciraField.CiraFieldAccess.CfValue;
 import tsh.d94.app.server.data.orm.cira.ciraField.CiraFieldAccess.CustomField;
 import tsh.d94.app.server.data.orm.cira.ciraProject.SnCiraProjectAccess;
-import tsh.d94.app.server.data.orm.cira.ciraProject.SnCiraProjectModel;
 import tsh.d94.app.server.data.orm.cira.ciraProjectMember.SnCiraProjectMemberAccess;
 import tsh.d94.app.server.data.orm.cira.ciraProjectMember.SnCiraProjectMemberModel;
 import tsh.d94.lib.core.data.constant.UseStatCd;
@@ -74,6 +73,7 @@ public class CiraFieldService {
 	private static final ObjectMapper JSON = new ObjectMapper();
 
 	private final CiraFieldAccess access;
+	private final SpaceGuard spaces;
 	private final SnCiraProjectAccess projectAccess;
 	private final SnCiraProjectMemberAccess memberAccess;
 	private final GsUserAccess userAccess;
@@ -254,7 +254,14 @@ public class CiraFieldService {
 	/** 전역 필드 또는 이 프로젝트 타입의 타입 필드를 프로젝트 필드로 복사하고 추가 필드 끝에 붙인다 */
 	@Transactional
 	public Field importToProject(String projectId, String sourceFieldId) {
+		return importToProject(projectId, null, sourceFieldId);
+	}
+
+	/** 공간 필드 세트 끝에 붙인다 (spaceId null = 기본 공간) */
+	@Transactional
+	public Field importToProject(String projectId, String spaceId, String sourceFieldId) {
 		requireMember(projectId);
+		String sid = spaces.resolve(projectId, spaceId).getObjId();
 		CustomField src = access.customField(tenant(), sourceFieldId);
 		String typeId = projectAccess.findById(projectId).getProjectTypeId();
 		boolean global = src != null && src.projectId() == null && src.projectTypeId() == null;
@@ -266,17 +273,24 @@ public class CiraFieldService {
 			throw new IllegalArgumentException("이미 이 타입의 기본 세트로 적용된 필드입니다");
 		}
 		Field copy = copyField(src, projectId, null);
-		appendProjectField(projectId, copy.fieldKey());
-		return projectField(projectId, copy.fieldKey());
+		appendSpaceField(projectId, sid, copy.fieldKey());
+		return spaceField(projectId, sid, copy.fieldKey());
 	}
 
 	/** 프로젝트 전용 필드. 프로젝트 멤버 누구나 만들고, 만들면 바로 그 프로젝트의 추가 필드가 된다 */
 	@Transactional
 	public Field createProjectField(String projectId, SaveCustomField req) {
+		return createProjectField(projectId, null, req);
+	}
+
+	/** 사용자 정의 필드는 프로젝트 소유, 만들면 그 공간 필드 세트 끝에 붙는다 */
+	@Transactional
+	public Field createProjectField(String projectId, String spaceId, SaveCustomField req) {
 		requireMember(projectId);
+		String sid = spaces.resolve(projectId, spaceId).getObjId();
 		Field f = createField(projectId, null, req, currentUserId());
-		appendProjectField(projectId, f.fieldKey());
-		return projectField(projectId, f.fieldKey());
+		appendSpaceField(projectId, sid, f.fieldKey());
+		return spaceField(projectId, sid, f.fieldKey());
 	}
 
 	@Transactional
@@ -284,7 +298,7 @@ public class CiraFieldService {
 		CustomField cf = requireField(id, projectId, null);
 		requireEditor(projectId, cf);
 		updateField(cf, req);
-		return projectField(projectId, "cf:" + id);
+		return toField(access.customField(tenant(), id), "project", true, viewer(projectId));
 	}
 
 	@Transactional
@@ -294,15 +308,43 @@ public class CiraFieldService {
 		access.deleteCustomField(cf.id());
 	}
 
-	private void appendProjectField(String projectId, String key) {
-		List<String> keys = new ArrayList<>(access.projectFields(projectId));
-		keys.add(key);
-		access.replaceProjectFields(projectId, keys);
+	private void appendSpaceField(String projectId, String spaceId, String key) {
+		List<CiraFieldAccess.TypeField> rows = new ArrayList<>(access.spaceFields(spaceId));
+		rows.add(new CiraFieldAccess.TypeField(key, true));
+		access.replaceSpaceFields(projectId, spaceId, rows);
 	}
 
-	/** 이 프로젝트 유효 필드 중 하나 (canEdit 이 현재 사용자 기준으로 채워진 것) */
-	private Field projectField(String projectId, String key) {
-		return effective(projectId).stream().filter(f -> f.fieldKey().equals(key)).findFirst().orElseThrow();
+	/** 이 공간 유효 필드 중 하나 (canEdit 이 현재 사용자 기준으로 채워진 것) */
+	private Field spaceField(String projectId, String spaceId, String key) {
+		return effective(projectId, spaceId).stream().filter(f -> f.fieldKey().equals(key)).findFirst().orElseThrow();
+	}
+
+	/**
+	 * 새 공간에 프리셋(구 프로젝트 타입)의 필드 세트를 복사한다. 타입 필드(cf)는 프로젝트 필드로 복사본을 만들어
+	 * 공간이 프리셋과 완전히 끊기게 한다(이후 프리셋 수정·삭제와 무관). typeId null = sys 기본 필드 없이 고정 필드만.
+	 */
+	@Transactional
+	public void copyPresetFields(String projectId, String spaceId, String typeId) {
+		List<CiraFieldAccess.TypeField> rows = new ArrayList<>();
+		if (typeId != null) {
+			Map<String, CustomField> typeCfs = access.typeFields(tenant(), typeId).stream()
+				.collect(Collectors.toMap(CustomField::id, Function.identity()));
+			Map<String, String> copied = new HashMap<>(); // 원본 id → 이 프로젝트의 복사본 키
+			access.projectCustomFields(tenant(), projectId).stream().filter(cf -> cf.sourceFieldId() != null)
+				.forEach(cf -> copied.putIfAbsent(cf.sourceFieldId(), "cf:" + cf.id()));
+			for (CiraFieldAccess.TypeField tf : access.typeSet(typeId)) {
+				String key = tf.fieldKey();
+				if (key.startsWith("cf:")) {
+					CustomField src = typeCfs.get(key.substring(3));
+					if (src == null) {
+						continue;
+					}
+					key = copied.computeIfAbsent(src.id(), x -> copyField(src, projectId, null).fieldKey());
+				}
+				rows.add(new CiraFieldAccess.TypeField(key, tf.defaultVisible()));
+			}
+		}
+		access.replaceSpaceFields(projectId, spaceId, rows);
 	}
 
 	private Field createField(String projectId, String typeId, SaveCustomField req, String createdBy) {
@@ -338,14 +380,24 @@ public class CiraFieldService {
 
 	/** 고정 → 타입 세트 → 프로젝트 추가 필드. 중복은 앞쪽이 이긴다. 읽기는 프로젝트 멤버 */
 	public List<Field> projectFields(String projectId) {
+		return projectFields(projectId, null);
+	}
+
+	public List<Field> projectFields(String projectId, String spaceId) {
 		requireMember(projectId);
-		return effective(projectId);
+		return effective(projectId, spaceId);
 	}
 
 	/** 프로젝트 추가 필드 전체 교체. 고정·타입 세트에 이미 있는 키는 그대로 받아 두고 계산에서 무시한다 */
 	@Transactional
 	public List<Field> replaceProjectFields(String projectId, List<String> keys) {
-		requireAdmin(projectId);
+		return replaceProjectFields(projectId, null, keys);
+	}
+
+	/** 공간 필드 세트 전체 교체 (V650: 타입 세트 고정 없음 — 공간 관리자가 자유롭게 켜고 끈다). 기존 키의 기본 표시 여부는 유지 */
+	@Transactional
+	public List<Field> replaceProjectFields(String projectId, String spaceId, List<String> keys) {
+		String sid = spaces.requireManager(spaces.resolve(projectId, spaceId)).getObjId();
 		Map<String, CustomField> cfs = visibleCustomFields(projectId);
 		List<String> clean = new ArrayList<>(new LinkedHashSet<>(keys));
 		clean.removeIf(FIXED::contains);
@@ -354,28 +406,28 @@ public class CiraFieldService {
 				throw new IllegalArgumentException("이 프로젝트에서 쓸 수 없는 필드입니다 (사용자 정의 필드는 라이브러리에서 가져오세요): " + key);
 			}
 		}
-		access.replaceProjectFields(projectId, clean);
-		return effective(projectId);
+		Map<String, Boolean> visible = new HashMap<>();
+		access.spaceFields(sid).forEach(tf -> visible.put(tf.fieldKey(), tf.defaultVisible()));
+		access.replaceSpaceFields(projectId, sid,
+			clean.stream().map(k -> new CiraFieldAccess.TypeField(k, visible.getOrDefault(k, true))).toList());
+		return effective(projectId, sid);
 	}
 
 	List<Field> effective(String projectId) {
-		SnCiraProjectModel project = projectAccess.findById(projectId);
+		return effective(projectId, null);
+	}
+
+	/** 고정 → 공간 필드 세트. 중복은 앞쪽이 이긴다 */
+	List<Field> effective(String projectId, String spaceId) {
+		String sid = spaces.resolve(projectId, spaceId).getObjId();
 		Map<String, CustomField> cfs = visibleCustomFields(projectId);
 		Viewer viewer = viewer(projectId);
 		Map<String, Field> out = new LinkedHashMap<>();
 		FIXED.forEach(k -> out.put(k, withSource(SYSTEM_BY_KEY.get(k), "fixed", true)));
-		if (project.getProjectTypeId() != null) {
-			for (CiraFieldAccess.TypeField tf : access.typeSet(project.getProjectTypeId())) {
-				Field f = resolve(tf.fieldKey(), cfs, viewer);
-				if (f != null) {
-					out.putIfAbsent(f.fieldKey(), withSource(f, "type", tf.defaultVisible()));
-				}
-			}
-		}
-		for (String key : access.projectFields(projectId)) {
-			Field f = resolve(key, cfs, viewer);
+		for (CiraFieldAccess.TypeField tf : access.spaceFields(sid)) {
+			Field f = resolve(tf.fieldKey(), cfs, viewer);
 			if (f != null) {
-				out.putIfAbsent(key, withSource(f, "project", true));
+				out.putIfAbsent(f.fieldKey(), withSource(f, "project", tf.defaultVisible()));
 			}
 		}
 		return new ArrayList<>(out.values());
@@ -385,10 +437,15 @@ public class CiraFieldService {
 
 	/** 없으면 기본 표시 필드. 있으면 죽은 키를 거르고, 처음 보는 기본 표시 필드는 뒤에 붙인다 (설계 5.3) */
 	public FieldKeys columnPref(String projectId) {
+		return columnPref(projectId, null);
+	}
+
+	public FieldKeys columnPref(String projectId, String spaceId) {
 		requireMember(projectId);
-		List<Field> eff = effective(projectId);
+		String sid = spaces.resolve(projectId, spaceId).getObjId();
+		List<Field> eff = effective(projectId, sid);
 		Set<String> effKeys = eff.stream().map(Field::fieldKey).collect(Collectors.toCollection(LinkedHashSet::new));
-		CiraFieldAccess.ColumnPref pref = access.columnPref(currentUserId(), projectId);
+		CiraFieldAccess.ColumnPref pref = access.columnPref(currentUserId(), sid);
 		List<String> keys = new ArrayList<>();
 		if (pref == null) {
 			eff.stream().filter(Field::defaultVisible).forEach(f -> keys.add(f.fieldKey()));
@@ -404,8 +461,14 @@ public class CiraFieldService {
 
 	@Transactional
 	public FieldKeys saveColumnPref(String projectId, List<String> fieldKeys) {
+		return saveColumnPref(projectId, null, fieldKeys);
+	}
+
+	@Transactional
+	public FieldKeys saveColumnPref(String projectId, String spaceId, List<String> fieldKeys) {
 		requireMember(projectId);
-		List<String> effKeys = effective(projectId).stream().map(Field::fieldKey).toList();
+		String sid = spaces.resolve(projectId, spaceId).getObjId();
+		List<String> effKeys = effective(projectId, sid).stream().map(Field::fieldKey).toList();
 		List<String> keys = new ArrayList<>(new LinkedHashSet<>(fieldKeys == null ? List.of() : fieldKeys));
 		for (String k : keys) {
 			if (!effKeys.contains(k)) {
@@ -413,15 +476,21 @@ public class CiraFieldService {
 			}
 		}
 		keys = withAlwaysShown(keys);
-		access.saveColumnPref(currentUserId(), projectId, writeJson(keys), writeJson(effKeys));
+		access.saveColumnPref(currentUserId(), projectId, sid, writeJson(keys), writeJson(effKeys));
 		return new FieldKeys(keys);
 	}
 
 	@Transactional
 	public FieldKeys resetColumnPref(String projectId) {
+		return resetColumnPref(projectId, null);
+	}
+
+	@Transactional
+	public FieldKeys resetColumnPref(String projectId, String spaceId) {
 		requireMember(projectId);
-		access.deleteColumnPref(currentUserId(), projectId);
-		return columnPref(projectId);
+		String sid = spaces.resolve(projectId, spaceId).getObjId();
+		access.deleteColumnPref(currentUserId(), sid);
+		return columnPref(projectId, sid);
 	}
 
 	// ── Task 사용자 정의 값 ─────────────────────────
@@ -446,7 +515,13 @@ public class CiraFieldService {
 	/** 유효 필드가 아닌 키·타입 불일치는 400. creating 이면 필수 필드도 검사. null·"" 은 값 삭제 */
 	@Transactional
 	public void applyValues(String projectId, String issueId, Map<String, Object> values, boolean creating) {
-		Map<String, Field> cfFields = effective(projectId).stream().filter(f -> "cf".equals(f.kind()))
+		applyValues(projectId, null, issueId, values, creating);
+	}
+
+	/** spaceId = Task 의 공간 (null = 공통 레이어 → 기본 공간 필드 세트) */
+	@Transactional
+	public void applyValues(String projectId, String spaceId, String issueId, Map<String, Object> values, boolean creating) {
+		Map<String, Field> cfFields = effective(projectId, spaceId).stream().filter(f -> "cf".equals(f.kind()))
 			.collect(Collectors.toMap(Field::fieldKey, Function.identity()));
 		Map<String, Object> given = values == null ? Map.of() : values;
 		if (creating) {
@@ -738,12 +813,6 @@ public class CiraFieldService {
 		return memberAccess.findByProjectIdAndUserId(projectId, currentUserId())
 			.filter(m -> UseStatCd.Usable.equals(m.getUseStatCd()))
 			.orElseThrow(() -> new AccessDeniedException("프로젝트 멤버가 아닙니다"));
-	}
-
-	private void requireAdmin(String projectId) {
-		if (!"ADMIN".equals(requireMember(projectId).getRole())) {
-			throw new AccessDeniedException("프로젝트 관리자만 변경할 수 있습니다");
-		}
 	}
 
 	private static String tenant() {

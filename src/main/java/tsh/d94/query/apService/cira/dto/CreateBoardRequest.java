@@ -11,5 +11,6 @@ import lombok.NoArgsConstructor;
 public class CreateBoardRequest {
 	@NotBlank
 	private String boardNm;
+	private String spaceId; // null = 기본 공간
 	private String boardType = "KANBAN";
 }

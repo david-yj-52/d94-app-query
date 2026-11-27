@@ -15,4 +15,5 @@ public class CreateProjectRequest {
 	private String description;
 	private String projectTypeId; // SN_CIRA_PROJECT_TYPE.OBJ_ID (기준정보)
 	private String projectType; // 옛 클라이언트용 타입 이름. projectTypeId 가 있으면 무시
+	private String defaultSpaceName; // 기본 작업 공간 이름 (없으면 General). 타입은 그 공간의 스타터 프리셋 (V650)
 }

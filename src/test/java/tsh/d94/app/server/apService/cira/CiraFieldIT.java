@@ -104,52 +104,46 @@ class CiraFieldIT {
 		ProjectResponse p = fixtures.project("SCRUM");
 		assertThat(p.getProjectTypeId()).isEqualTo(scrum.id());
 		assertThat(jdbc.queryForObject("select board_type from sn_cira_board where project_id=?", String.class, p.getId()))
-			.isEqualTo("KANBAN");
+			.isEqualTo("SCRUM"); // V650: 타입 = 기본 작업 공간 프리셋, 보드 유형도 프리셋에서
 		assertThat(jdbc.queryForList("select type_nm from sn_cira_cira_issue_type", String.class)).contains("Issue")
 			.doesNotContain("Task");
 	}
 
 	@Test
-	@DisplayName("유효 필드 = 고정 → 타입 세트 → 추가 필드. 타입 세트 변경은 기존 프로젝트에 즉시 반영되고, 프로젝트가 물려받은 필드를 뺄 수 없다")
-	void effectiveFields_followTypeAndCannotDropInherited() {
+	@DisplayName("V650: 유효 필드 = 고정 → 공간 필드 세트. 타입(프리셋)은 만들 때 1회 복사 — 이후 타입 변경과 무관하고, 공간이 프리셋 필드를 자유롭게 뺀다")
+	void effectiveFields_presetCopiedOnce_spaceOwnsSet() {
 		assertThat(keys(fields.projectFields(project.getId()))).containsExactly(
 			"sys:type", "sys:key", "sys:summary", "sys:status", "sys:priority", "sys:assignee", "sys:modifiedAt");
 
 		Field customer = typeSelect("고객사");
-		fields.replaceTypeFields(type.id(), List.of(new TypeField("sys:dueDate", true), new TypeField(customer.fieldKey(), true),
-			new TypeField("sys:summary", true)));
-		fields.replaceProjectFields(project.getId(), List.of("sys:storyPoints", "sys:dueDate"));
+		fields.replaceTypeFields(type.id(), List.of(new TypeField("sys:dueDate", true), new TypeField(customer.fieldKey(), true)));
+		assertThat(keys(fields.projectFields(project.getId()))).doesNotContain("sys:dueDate", customer.fieldKey());
 
-		List<Field> eff = fields.projectFields(project.getId());
-		assertThat(keys(eff)).containsExactly("sys:type", "sys:key", "sys:summary", "sys:status", "sys:dueDate",
-			customer.fieldKey(), "sys:storyPoints");
-		assertThat(eff.get(4).source()).isEqualTo("type"); // 추가 목록에도 있지만 타입 쪽이 이긴다
+		List<Field> eff = fields.replaceProjectFields(project.getId(), List.of("sys:storyPoints", "sys:dueDate", "sys:summary"));
+		assertThat(keys(eff)).containsExactly("sys:type", "sys:key", "sys:summary", "sys:status", "sys:storyPoints", "sys:dueDate");
+		assertThat(eff.get(4).source()).isEqualTo("project");
 
-		// 이름을 바꿔도 연결 유지
+		// 이름을 바꿔도 프로젝트의 타입 참조(이름 사본)는 유지
 		fields.updateType(type.id(), new SaveType(type.typeNm() + "2", null));
 		assertThat(projects.getProject(project.getId()).getProjectTypeNm()).isEqualTo(type.typeNm() + "2");
 	}
 
 	@Test
-	@DisplayName("사람별 컬럼: 저장 후 관리자가 타입 세트에 넣은 기본 표시 필드는 뒤에 붙고, 죽은 키는 걸러지고, 키·요약은 항상 보인다")
+	@DisplayName("사람별 컬럼: 저장 후 공간 세트에 새로 생긴 기본 표시 필드는 뒤에 붙고, 죽은 키는 걸러지고, 키·요약은 항상 보인다")
 	void columnPref_newDefaultVisibleAppended_deadKeysFiltered() {
 		assertThat(fields.columnPref(project.getId()).fieldKeys()).containsExactly(
 			"sys:type", "sys:key", "sys:summary", "sys:status", "sys:priority", "sys:assignee", "sys:modifiedAt");
 
-		Field customer = typeSelect("고객사");
-		fields.replaceTypeFields(type.id(), List.of(new TypeField("sys:priority", true), new TypeField(customer.fieldKey(), false)));
+		Field customer = fields.createProjectField(project.getId(), new SaveCustomField("고객사", "TEXT", false, null, null));
 		fields.saveColumnPref(project.getId(), List.of("sys:status", customer.fieldKey()));
 		assertThat(fields.columnPref(project.getId()).fieldKeys())
 			.containsExactly("sys:key", "sys:summary", "sys:status", customer.fieldKey());
 
-		fields.replaceTypeFields(type.id(), List.of(new TypeField("sys:priority", true), new TypeField(customer.fieldKey(), false),
-			new TypeField("sys:reporter", true), new TypeField("sys:sprint", false)));
-		fields.deleteTypeField(type.id(), id(customer));
+		fields.replaceProjectFields(project.getId(), List.of("sys:priority", "sys:reporter"));
 		assertThat(fields.columnPref(project.getId()).fieldKeys())
 			.containsExactly("sys:key", "sys:summary", "sys:status", "sys:reporter");
 
-		assertThat(fields.resetColumnPref(project.getId()).fieldKeys()).contains("sys:priority", "sys:reporter")
-			.doesNotContain("sys:sprint");
+		assertThat(fields.resetColumnPref(project.getId()).fieldKeys()).contains("sys:priority", "sys:reporter");
 	}
 
 	@Test

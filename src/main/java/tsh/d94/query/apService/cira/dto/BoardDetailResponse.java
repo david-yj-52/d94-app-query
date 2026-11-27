@@ -15,6 +15,7 @@ import lombok.NoArgsConstructor;
 public class BoardDetailResponse {
 	private String id;
 	private String projectId;
+	private String spaceId;
 	private String boardNm;
 	private String boardType;
 	private List<BoardColumnResponse> columns;

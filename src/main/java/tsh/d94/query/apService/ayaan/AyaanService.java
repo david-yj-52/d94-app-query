@@ -81,6 +81,8 @@ public class AyaanService {
 	private final SnCiraIssueStatusAccess statusAccess;
 	private final SnCiraCiraIssueTypeAccess issueTypeAccess;
 	private final IssueService issueService;
+	private final tsh.d94.app.server.data.orm.cira.ciraDocs.CiraDocsAccess ciraDocsAccess;
+	private final tsh.d94.app.server.data.orm.docs.docsNote.SnDocsNoteAccess noteAccess;
 	private final GsUserAccess userAccess;
 	private final ObjectMapper om;
 	private final PlatformTransactionManager txManager;
@@ -386,7 +388,11 @@ public class AyaanService {
 	public IssueDto issueByKey(String issueKey) {
 		var i = issueAccess.findByIssueKey(issueKey).orElseThrow(() -> new EntityNotFoundException("issue not found: " + issueKey));
 		String projectKey = projectAccess.findProjectKeyById(i.getProjectId()).orElse(null);
-		return new IssueDto(i.getIssueKey(), i.getTitle(), i.getContent(), projectKey);
+		// 설명의 원본은 Docs 메인 노트 (V650). 이관 전 Task 만 옛 CONTENT
+		String content = ciraDocsAccess.mainNoteId(i.getObjId()).flatMap(noteAccess::findByIdOptional)
+			.map(n -> tsh.d94.app.server.apService.cira.CiraDocsService.description(n.getContent()))
+			.orElse(i.getContent());
+		return new IssueDto(i.getIssueKey(), i.getTitle(), content, projectKey);
 	}
 
 	public List<MilestoneDto> milestones(String projectKey) {

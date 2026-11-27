@@ -26,4 +26,11 @@ public interface SnCiraIssueRepo extends BaseJpaRepository<SnCiraIssueModel, Str
 	@Query("SELECT i FROM SnCiraIssueModel i WHERE i.sprintId IN :sprintIds AND i.deletedAt IS NULL")
 	List<SnCiraIssueModel> findBySprintIds(@Param("sprintIds") List<String> sprintIds);
 
+
+	long countBySpaceIdAndDeletedAtIsNull(String spaceId);
+
+	List<SnCiraIssueModel> findByProjectIdAndFeatureScopeIsNotNullAndDeletedAtIsNull(String projectId);
+
+	long countByFeatureIdAndDeletedAtIsNull(String featureId);
+
 }

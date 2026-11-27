@@ -146,14 +146,16 @@ class IssueServiceIT {
 
 		IssueResponse res = issueService.createIssue(project.getId(), req);
 
-		String stored = jdbc.queryForObject(
-			"select content from sn_cira_issue where obj_id = ?", String.class, res.getId());
-		assertThat(stored).hasSize(1000);
+		// V650: 설명은 Docs 메인 노트에 저장된다
+		String stored = jdbc.queryForObject("""
+			select n.content from sn_docs_note n join sn_cira_issue_doc d on d.note_id = n.obj_id
+			where d.issue_id = ? and d.doc_role = 'MAIN'""", String.class, res.getId());
+		assertThat(stored).contains("가".repeat(1000));
 	}
 
 	@Test
-	@DisplayName("설명을 255자 넘게 수정해도 저장되고 변경 이력(old_val/new_val)이 남는다 — ddl-auto 가 text 를 varchar(255) 로 되돌리던 결함")
-	void updateIssue_withLongContent_isLogged() {
+	@DisplayName("V650: 설명은 Docs 메인 노트에만 — 255자 넘는 수정도 노트 본문에 저장되고 SN_CIRA_ISSUE.CONTENT 는 비어 있다")
+	void updateIssue_withLongContent_goesToMainNote() {
 		CreateIssueRequest req = fullRequest(null);
 		req.setContent("가".repeat(300));
 		IssueResponse res = issueService.createIssue(project.getId(), req);
@@ -162,10 +164,11 @@ class IssueServiceIT {
 		upd.setContent("나".repeat(1000));
 		issueService.updateIssue(res.getId(), upd);
 
-		Map<String, Object> log = jdbc.queryForMap(
-			"select old_val, new_val from sn_cira_issue_log where issue_id = ? and field_nm = 'CONTENT'", res.getId());
-		assertThat((String) log.get("old_val")).hasSize(300);
-		assertThat((String) log.get("new_val")).hasSize(1000);
+		assertThat(jdbc.queryForObject("select content from sn_cira_issue where obj_id = ?", String.class, res.getId())).isNull();
+		String note = jdbc.queryForObject("""
+			select n.content from sn_docs_note n join sn_cira_issue_doc d on d.note_id = n.obj_id
+			where d.issue_id = ? and d.doc_role = 'MAIN'""", String.class, res.getId());
+		assertThat(note).contains("나".repeat(1000)).doesNotContain("가".repeat(300));
 	}
 
 	@Test
@@ -187,7 +190,7 @@ class IssueServiceIT {
 	void issueTypes_seededAndListed() {
 		assertThat(issueService.getIssueTypes())
 			.extracting(tsh.d94.app.server.apService.cira.dto.IssueTypeResponse::getTypeNm)
-			.contains("Bug", "Epic", "Issue", "Story");
+			.contains("Bug", "Feature", "Issue", "Story"); // V650: Epic → Feature
 	}
 
 	@Test

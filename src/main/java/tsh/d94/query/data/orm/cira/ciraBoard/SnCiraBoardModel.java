@@ -29,6 +29,9 @@ public class SnCiraBoardModel extends BaseModel {
 	@Column(name = "PROJECT_ID", length = 100, nullable = false)
 	private String projectId;
 
+	@Column(name = "SPACE_ID", length = 100)
+	private String spaceId;
+
 	@Column(name = "BOARD_NM", length = 200, nullable = false)
 	private String boardNm;
 

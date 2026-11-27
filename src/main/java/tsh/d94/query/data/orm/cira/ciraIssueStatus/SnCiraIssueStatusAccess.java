@@ -45,4 +45,13 @@ public class SnCiraIssueStatusAccess extends AbstractCrudService<SnCiraIssueStat
 		return repo.findByProjectIdOrderBySortOrd(projectId);
 	}
 
+
+	public List<SnCiraIssueStatusModel> findBySpaceId(String spaceId) {
+		return repo.findBySpaceIdOrderBySortOrd(spaceId);
+	}
+
+	public Optional<SnCiraIssueStatusModel> findBySpaceIdAndStatusNm(String spaceId, String statusNm) {
+		return repo.findBySpaceIdAndStatusNm(spaceId, statusNm);
+	}
+
 }

@@ -30,4 +30,9 @@ public class SnCiraIssueTransitionAccess extends AbstractCrudService<SnCiraIssue
 		return repo.findByProjectIdAndFromStatusId(projectId, fromStatusId);
 	}
 
+
+	public List<SnCiraIssueTransitionModel> findBySpaceId(String spaceId) {
+		return repo.findBySpaceId(spaceId);
+	}
+
 }

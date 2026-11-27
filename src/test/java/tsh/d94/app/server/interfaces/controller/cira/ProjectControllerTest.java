@@ -78,8 +78,8 @@ class ProjectControllerTest {
 	@Test
 	@DisplayName("워크플로우 상태·전이 경로")
 	void workflowRoutes() throws Exception {
-		given(projectService.getWorkflowStatuses("p-1")).willReturn(List.of());
-		given(projectService.getWorkflowTransitions("p-1")).willReturn(List.of());
+		given(projectService.getWorkflowStatuses("p-1", null)).willReturn(List.of()); // spaceId 없음 = 기본 공간
+		given(projectService.getWorkflowTransitions("p-1", null)).willReturn(List.of());
 
 		mvc.perform(get("/api/v1/projects/p-1/workflow/statuses")).andExpect(jsonPath("$.data").isArray());
 		mvc.perform(get("/api/v1/projects/p-1/workflow/transitions")).andExpect(jsonPath("$.data").isArray());

@@ -94,12 +94,14 @@ public class CqlQueryBuilder {
 		String col = mapFieldToColumn(cn.field());
 		String value = resolveValue(cn.value());
 
-		// text 필드: LIKE 검색 (title OR content)
+		// text 필드: LIKE 검색 (title OR content). V650 부터 설명은 Docs 메인 노트에 있어 content 는 이관 전 Task 만 —
+		// NULL 이면 NOT text ~ 가 NULL 로 빠지므로 coalesce.
+		// ponytail: 메인 노트 본문은 검색하지 않는다(엔티티 밖 테이블). 설명 검색은 Docs 검색으로. 필요해지면 native 쿼리로 EXISTS 를 붙인다.
 		if ("text".equals(cn.field())) {
 			String pattern = "%" + value + "%";
 			return cb.or(
 				cb.like(cb.lower(root.get("title")), pattern.toLowerCase()),
-				cb.like(cb.lower(root.get("content")), pattern.toLowerCase())
+				cb.like(cb.lower(cb.coalesce(root.get("content"), "")), pattern.toLowerCase())
 			);
 		}
 

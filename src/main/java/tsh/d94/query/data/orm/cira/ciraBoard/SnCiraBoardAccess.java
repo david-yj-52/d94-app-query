@@ -26,4 +26,9 @@ public class SnCiraBoardAccess extends AbstractCrudService<SnCiraBoardModel, Str
 		return repo.findByProjectId(projectId);
 	}
 
+
+	public List<SnCiraBoardModel> findBySpaceId(String spaceId) {
+		return repo.findBySpaceId(spaceId);
+	}
+
 }

@@ -40,6 +40,13 @@ public class CiraDocsController {
 		return ApiResponse.ok(service.saveRules(projectId, issueTypeId, body));
 	}
 
+	/** 전사 기준정보 공통 산출물 규칙 → 프로젝트 공통 잠금 복사 (프로젝트 ADMIN). ruleIds 비우면 전부 */
+	@PostMapping("/doc-rules/import")
+	public ApiResponse<List<DocRuleDto>> importRules(@PathVariable String projectId,
+		@RequestBody(required = false) CiraDocsService.ImportRulesRequest req) {
+		return ApiResponse.ok(service.importRules(projectId, req));
+	}
+
 	@GetMapping("/issues/{issueId}/docs")
 	public ApiResponse<IssueDocsResponse> docs(@PathVariable String projectId, @PathVariable String issueId) {
 		return ApiResponse.ok(service.docs(projectId, issueId));

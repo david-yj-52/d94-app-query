@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -120,13 +121,14 @@ public class CiraFieldController {
 	}
 
 	@GetMapping("/projects/{projectId}/fields")
-	public ApiResponse<List<Field>> projectFields(@PathVariable String projectId) {
-		return ApiResponse.ok(service.projectFields(projectId));
+	public ApiResponse<List<Field>> projectFields(@PathVariable String projectId, @RequestParam(required = false) String spaceId) {
+		return ApiResponse.ok(service.projectFields(projectId, spaceId));
 	}
 
 	@PutMapping("/projects/{projectId}/fields")
-	public ApiResponse<List<Field>> replaceProjectFields(@PathVariable String projectId, @RequestBody FieldKeys req) {
-		return ApiResponse.ok(service.replaceProjectFields(projectId, req.fieldKeys() == null ? List.of() : req.fieldKeys()));
+	public ApiResponse<List<Field>> replaceProjectFields(@PathVariable String projectId, @RequestParam(required = false) String spaceId,
+		@RequestBody FieldKeys req) {
+		return ApiResponse.ok(service.replaceProjectFields(projectId, spaceId, req.fieldKeys() == null ? List.of() : req.fieldKeys()));
 	}
 
 	/** 가져올 수 있는 전역·타입 필드 (프로젝트 멤버) */
@@ -137,13 +139,15 @@ public class CiraFieldController {
 
 	/** 라이브러리 필드를 프로젝트 필드로 복사 (프로젝트 멤버) */
 	@PostMapping("/projects/{projectId}/custom-fields/import")
-	public ApiResponse<Field> importToProject(@PathVariable String projectId, @RequestBody ImportField req) {
-		return ApiResponse.ok(service.importToProject(projectId, req.sourceFieldId()));
+	public ApiResponse<Field> importToProject(@PathVariable String projectId, @RequestParam(required = false) String spaceId,
+		@RequestBody ImportField req) {
+		return ApiResponse.ok(service.importToProject(projectId, spaceId, req.sourceFieldId()));
 	}
 
 	@PostMapping("/projects/{projectId}/custom-fields")
-	public ApiResponse<Field> createProjectField(@PathVariable String projectId, @RequestBody SaveCustomField req) {
-		return ApiResponse.ok(service.createProjectField(projectId, req));
+	public ApiResponse<Field> createProjectField(@PathVariable String projectId, @RequestParam(required = false) String spaceId,
+		@RequestBody SaveCustomField req) {
+		return ApiResponse.ok(service.createProjectField(projectId, spaceId, req));
 	}
 
 	@PutMapping("/projects/{projectId}/custom-fields/{id}")
@@ -159,18 +163,19 @@ public class CiraFieldController {
 	}
 
 	@GetMapping("/projects/{projectId}/column-pref")
-	public ApiResponse<FieldKeys> columnPref(@PathVariable String projectId) {
-		return ApiResponse.ok(service.columnPref(projectId));
+	public ApiResponse<FieldKeys> columnPref(@PathVariable String projectId, @RequestParam(required = false) String spaceId) {
+		return ApiResponse.ok(service.columnPref(projectId, spaceId));
 	}
 
 	@PutMapping("/projects/{projectId}/column-pref")
-	public ApiResponse<FieldKeys> saveColumnPref(@PathVariable String projectId, @RequestBody FieldKeys req) {
-		return ApiResponse.ok(service.saveColumnPref(projectId, req.fieldKeys()));
+	public ApiResponse<FieldKeys> saveColumnPref(@PathVariable String projectId, @RequestParam(required = false) String spaceId,
+		@RequestBody FieldKeys req) {
+		return ApiResponse.ok(service.saveColumnPref(projectId, spaceId, req.fieldKeys()));
 	}
 
 	/** [기본값으로] — 타입 기본 표시로 되돌린다 */
 	@DeleteMapping("/projects/{projectId}/column-pref")
-	public ApiResponse<FieldKeys> resetColumnPref(@PathVariable String projectId) {
-		return ApiResponse.ok(service.resetColumnPref(projectId));
+	public ApiResponse<FieldKeys> resetColumnPref(@PathVariable String projectId, @RequestParam(required = false) String spaceId) {
+		return ApiResponse.ok(service.resetColumnPref(projectId, spaceId));
 	}
 }
