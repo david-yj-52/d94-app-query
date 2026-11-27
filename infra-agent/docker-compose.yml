@@ -1,0 +1,27 @@
+# 호스트마다: .env 에 INFRA_TOKEN, NODE_KEY(, NODE_NAME, NODE_TYPE, NODE_LOCATION) 를 두고
+#   docker compose up -d --build            (에이전트만)
+#   docker compose --profile mqtt up -d --build   (delap: ESP32 브리지까지)
+services:
+  agent:
+    build: .
+    container_name: d94-infra-agent
+    restart: unless-stopped
+    pid: host            # 호스트 프로세스 Top-N
+    env_file: .env
+    environment:
+      HOST_ROOT: /hostfs
+    volumes:
+      - /:/hostfs:ro                                   # 디스크 사용량·os-release
+      - /var/run/docker.sock:/var/run/docker.sock:ro   # 컨테이너 메모리·CPU
+    mem_limit: 64m
+    logging: {driver: json-file, options: {max-size: "5m", max-file: "2"}}
+
+  mqtt-bridge:
+    build: .
+    container_name: d94-infra-mqtt-bridge
+    profiles: [mqtt]
+    restart: unless-stopped
+    command: ["python", "mqtt_bridge.py"]
+    env_file: .env
+    mem_limit: 48m
+    logging: {driver: json-file, options: {max-size: "5m", max-file: "2"}}
