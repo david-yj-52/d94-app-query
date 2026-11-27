@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 @Configuration
-@EnableConfigurationProperties(StudyProperties.class)
+@EnableConfigurationProperties({StudyProperties.class, DocsRagProperties.class})
 public class StudyConfig {
 
 	/** PDF 파싱 전용. 파싱은 파서 쪽에서 무거우므로 동시 2건까지. */

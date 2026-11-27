@@ -37,6 +37,7 @@ import tsh.d94.app.server.apService.docs.DocsDtos.VersionResponse;
 import tsh.d94.app.server.apService.docs.DocsEvolveService;
 import tsh.d94.app.server.apService.docs.DocsFolderService;
 import tsh.d94.app.server.apService.docs.DocsImageService;
+import tsh.d94.app.server.apService.docs.DocsKnowledgeService;
 import tsh.d94.app.server.apService.docs.DocsNoteService;
 import tsh.d94.app.server.apService.docs.DocsVaultService;
 import tsh.d94.lib.core.interfaces.rest.ApiResponse;
@@ -52,6 +53,7 @@ public class DocsController {
 	private final DocsEvolveService evolve;
 	private final DocsImageService images;
 	private final DocsVaultService vaults;
+	private final DocsKnowledgeService knowledge;
 
 	// ── 폴더 ──
 
@@ -124,6 +126,17 @@ public class DocsController {
 		return ApiResponse.ok(notes.get(id));
 	}
 
+	@PostMapping("/notes/{id}/knowledge")
+	public ApiResponse<DocsKnowledgeService.KnowledgeResult> indexKnowledge(@PathVariable String id) {
+		return ApiResponse.ok(knowledge.index(id));
+	}
+
+	@GetMapping("/knowledge/search")
+	public ApiResponse<List<DocsKnowledgeService.KnowledgeHit>> searchKnowledge(@RequestParam String q,
+		@RequestParam(required = false) String vaultId) {
+		return ApiResponse.ok(knowledge.search(q, vaultId));
+	}
+
 	@PutMapping("/notes/{id}")
 	public ApiResponse<NoteResponse> updateNote(@PathVariable String id, @RequestBody NoteRequest req) {
 		return ApiResponse.ok(notes.update(id, req));
@@ -136,6 +149,7 @@ public class DocsController {
 
 	@DeleteMapping("/notes/{id}")
 	public ApiResponse<Void> deleteNote(@PathVariable String id) {
+		knowledge.forget(id);
 		notes.delete(id);
 		return ApiResponse.noContent();
 	}

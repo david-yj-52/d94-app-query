@@ -150,7 +150,7 @@ sequenceDiagram
 | `MessageOutboundController`     | `/util/message-outbound` | 메시지 수동 발행 유틸 |
 | `AuthController`                | `/api/v1/auth`           | lib-core `BaseAuthController`(register·login·refresh·logout) + `GET /public-key`. login·register 본문은 암호화 봉투 `{enc}` 만 받음 (아래 "자격 증명 암호화") |
 | `StudyController`               | `/api/v1/study`          | PDF 학습 뷰어 — 분할 업로드(`documents/uploads`, 조각 768KB), 문서·목차·페이지·그림, 단어장(`terms`), 마킹·노트(`annotations`). 아래 "PDF 학습 뷰어" |
-| `DocsController`                | `/api/v1/docs`           | Docs 다중 vault(`GET /vaults`, 목록·Task·titles 에 `vaultId`, 생략·`ALL`=통합 뷰) — 폴더·노트 CRUD·이동, 목록 필터·titles·by-title, 버전·백링크, 진화(derive·kind·lineage), Task(`tasks`, 상태 변경·노트 승격). 아래 "Docs" |
+| `DocsController`                | `/api/v1/docs`           | Docs 다중 vault(`GET /vaults`, 목록·Task·titles 에 `vaultId`, 생략·`ALL`=통합 뷰) — 폴더·노트 CRUD·이동, 목록 필터·titles·by-title, 버전·백링크, 진화(derive·kind·lineage), Task, RAG 지식화·검색. 아래 "Docs" |
 | `LifeMetricController`          | `/api/v1/life-metric`    | Life Metric(삶의 수치화) — 템플릿, 지표 CRUD, 기준값(`inputs`), 시계열 로그(`logs`), 평가(`evaluate`), 저장 전 미리보기(`preview`). 아래 "Life Metric" |
 | `InterfaceTestController`       | `/api/v1/interface-tests` | 인터페이스(통신) 테스트 CRUD — GET·HEAD·POST(201)·PUT·PATCH·DELETE(204) |
 | `GlobalExceptionHandler`        | —                        | 전역 예외 처리        |
@@ -223,6 +223,8 @@ sequenceDiagram
 - 테스트: `StudyLogicTest`, `StudyUploadServiceTest`, `StudyFlowIT`(파서·MinIO mock).
 
 ### Docs (웹 버전 Obsidian형 개인 vault)
+
+`DocsKnowledgeService` 는 `POST /notes/{id}/knowledge` 로 사용자가 접근 가능한 문서 하나를 `docs_chunks` 에 색인하고, `GET /knowledge/search?q=...&vaultId=...` 로 BM25 + kNN 검색을 수행한다. 색인은 명시적 요청만, 임베딩은 `${DOCS_RAG_OLLAMA_URL}` 의 `nomic-embed-text`(768 dims). 검색은 `DocsVaultService.scope()` vault filter 를 적용한 뒤 최신 버전이며 현재 접근 가능한 문서 결과만 반환한다. delap 서비스 설정과 데이터 보존은 d94-note `infra/docs-rag/README.md` 참조.
 
 계획: d94-note `docs/superpowers/plans/2026-11-21-docs-service.md` · 작업: CIRA DOCS 프로젝트
 

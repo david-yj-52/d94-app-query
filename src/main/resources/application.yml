@@ -16,6 +16,14 @@ infra:
     project: ${INFRA_VERCEL_PROJECT:d94-web}
     team-id: ${INFRA_VERCEL_TEAM_ID:}
     node-key: ${INFRA_VERCEL_NODE_KEY:vercel-web}
+docs:
+  rag:
+    elasticsearch-url: ${DOCS_RAG_ELASTICSEARCH_URL:http://localhost:9200}
+    elasticsearch-username: ${DOCS_RAG_ELASTICSEARCH_USERNAME:docs_rag_app}
+    elasticsearch-password: ${DOCS_RAG_ELASTICSEARCH_PASSWORD:}
+    ollama-url: ${DOCS_RAG_OLLAMA_URL:http://localhost:11434}
+    embedding-model: ${DOCS_RAG_EMBEDDING_MODEL:nomic-embed-text}
+    index: ${DOCS_RAG_INDEX:docs_chunks}
 
 cira:
   storage:
