@@ -4,7 +4,8 @@ env: INFRA_URL, INFRA_TOKEN (agent.py 와 같음), MQTT_HOST(기본 192.168.1.74
      MQTT_USERNAME/MQTT_PASSWORD (브로커는 익명 불가 — 읽기 전용 계정 d94-infra-bridge),
      MQTT_TOPIC(기본 smartfarm/esp32/+/telemetry), MIN_INTERVAL_SEC(장비당 최소 전송 간격, 기본 60)
 
-telemetry 본문(JSON) 예: {"free_heap": 182344, "rssi": -61, "uptime": 3600}
+telemetry 본문(JSON) 예: {"free_heap": 182344, "heap_total": 327680, "rssi": -61, "uptime": 3600}
+heap_total 이 있으면 heap 사용률을 memPct 로 보낸다(ESP32 는 CPU% 가 없다).
 """
 import json
 import os
@@ -21,11 +22,13 @@ _last = {}
 
 def to_ingest(device, t):
     heap = t.get("free_heap")
+    total = t.get("heap_total")
     return {
         "name": f"ESP32 {device}",
         "nodeType": "MCU",
         "location": "HOME_LAN",
         "uptimeSec": t.get("uptime"),
+        "memPct": round((total - heap) * 100 / total, 1) if heap is not None and total else None,
         "extra": {"free_heap_kb": round(heap / 1024, 1) if heap is not None else None,
                   "wifi_rssi": t.get("rssi"), "raw": t},
         "processes": [],
